@@ -1,10 +1,11 @@
 name: build
 
 # Every push / PR: build everything and run the headless bench.
-# A tag like v0.2.0: the same, then publish a GitHub Release with the APK and the Windows installer.
+# Push to the `release` branch (or a tag like v0.2.0): the same, then publish a GitHub Release with the
+# APK and the Windows installer. On `release` the version comes from desktop/CMakeLists.txt.
 on:
   push:
-    branches: [main]
+    branches: [main, release]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
@@ -21,6 +22,9 @@ jobs:
       - name: Version
         id: ver
         run: |
+          IS_RELEASE=false
+          [[ "$GITHUB_REF" == refs/tags/v* || "$GITHUB_REF" == refs/heads/release ]] && IS_RELEASE=true
+          echo "release=$IS_RELEASE" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             V="${GITHUB_REF#refs/tags/v}"
           else
@@ -60,7 +64,7 @@ jobs:
           if [ -n "$KEYSTORE_B64" ]; then
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
             export KEYSTORE="$RUNNER_TEMP/release.keystore" KEY_PASS="$KEYSTORE_PASS"
-          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          elif [ "${{ steps.ver.outputs.release }}" = true ]; then
             echo "::error::Release builds need the ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASS / ANDROID_KEY_ALIAS secrets"
             exit 1
           else
@@ -97,10 +101,10 @@ jobs:
             dist/*.exe
 
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.ver.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           V="${{ steps.ver.outputs.version }}"
-          gh release create "v$V" "dist/rng-lens-setup-$V.exe" "dist/rng-lens-$V.apk" \
+          gh release create "v$V" "dist/rng-lens-setup-$V.exe" "dist/rng-lens-$V.apk" --target "$GITHUB_SHA" \
             --title "rng-lens $V" --notes-file packaging/release-notes.md

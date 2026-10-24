@@ -72,7 +72,8 @@ cd desktop && cmake -B build-linux && cmake --build build-linux -j
 
 Add three repository secrets once (Settings > Secrets and variables > Actions): `ANDROID_KEYSTORE_B64`
 (base64 of the release keystore), `ANDROID_KEYSTORE_PASS`, `ANDROID_KEY_ALIAS`. Then
-`git tag v0.2.0 && git push origin v0.2.0` - CI builds, benches and publishes the Release.
+bump the version in `desktop/CMakeLists.txt` and push to the `release` branch (`git push origin main:release`),
+or push a tag `vX.Y.Z` - CI builds, benches and publishes the Release with the tag.
 
 ## License
 
