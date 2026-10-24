@@ -1,0 +1,7 @@
+build/
+dist/
+desktop/build-*/
+third_party/ffmpeg-win/
+tools/bench-out/
+tools/dshow-probe/*.exe
+*.keystore

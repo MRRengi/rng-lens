@@ -1,0 +1,87 @@
+# rng-lens - spec v1
+
+Open-source phone-as-webcam. Every feature free, no watermark, no account.
+The phone only captures and hardware-encodes; everything else (decode, rotate,
+mirror, filters, virtual camera) runs on the PC.
+
+## Goals
+
+- Any app on the PC (Zoom, Discord, OBS, Meet in Chrome, Teams) sees a camera called **rng-lens**.
+- Wi-Fi (auto-discovery) and USB (adb forward).
+- Up to 4K and 60 fps when the phone supports it; H.264 by default, HEVC as an option.
+- Every lens the phone exposes, zoom, focus auto/lock/manual, exposure lock, EV, white-balance lock, torch, stabilization.
+- Mirror / flip / rotate on the PC side (free for the phone).
+- Phone stays cool: no CPU frame copies, no preview rendering, black screen while streaming.
+
+v2 (not now): phone mic as an audio device, filters, Windows 11 Media Foundation virtual camera, iOS, macOS.
+
+## Architecture
+
+```
+PHONE (Android, Java, no libraries)
+Camera2 --Surface--> MediaCodec HW encoder --> AnnexB access units --> TCP :38440
+                       (zero copy)                                  UDP beacon :38441
+PC (C++17)
+TCP client -> FFmpeg decode (threaded, low delay) -> YUV planes -> OpenGL
+  -> preview (ImGui window)  + FBO at output size -> PBO readback -> virtual camera
+                                                       Windows: rebranded Softcam (DirectShow)
+                                                       Linux:   v4l2loopback
+```
+
+Phone details
+- Encoder input is a `Surface`; the camera writes straight into it. The app never touches pixels.
+- Encoder in async mode on its own HandlerThread. Output buffers go to a bounded send queue; if the
+  network falls behind, non-key frames are dropped until the next key frame and a sync frame is requested.
+- `KEY_PRIORITY=0` (realtime), `latency=1` (API 30+), `KEY_REPEAT_PREVIOUS_FRAME_AFTER` so a static
+  scene costs nothing, I-frame every 2 s, keyframe on demand.
+- Zoom via `CONTROL_ZOOM_RATIO` (API 30+, through reflection - this lets ultra-wide go below 1x on
+  logical cameras) with `SCALER_CROP_REGION` fallback.
+- Streaming screen: pure black, brightness at minimum, keep-screen-on, high-perf Wi-Fi lock.
+- Phone UI: status, IP, start/stop, "blackout" toggle. All camera controls come from the PC.
+- Built without Gradle: javac (release 8) against android-23 platform jar -> dx -> aapt -> zipalign -> apksigner.
+  minSdk 23, targetSdk 28.
+
+PC details
+- One window: preview + control panel (Dear ImGui on GLFW/OpenGL 3.3).
+- Device list: Wi-Fi beacons, "USB" button (runs `adb forward tcp:38440 tcp:38440`), manual IP.
+- Rotation from the phone's sensor orientation + user rotate; mirror/flip in the shader.
+- Virtual camera output size is fixed by the user (720p / 1080p / 4K, default 1080p30); the stream is
+  letterboxed into it. Changing it recreates the camera.
+- `--headless` mode: connect, decode N frames, dump the last one to PNG, print stats. No window, no GL. Used by the bench.
+
+## Protocol v1 (TCP, little-endian)
+
+Every message: `u8 type | u32 length | payload[length]`.
+
+Phone -> PC
+| type | name   | payload |
+|------|--------|---------|
+| 0x01 | HELLO  | UTF-8 JSON: `{proto, device, cameras:[{id, facing, sensorOrientation, sizes:[[w,h]], fps:[[min,max]], zoom:[min,max], flash, afManual, minFocus}], state}` |
+| 0x02 | CONFIG | `u8 codec (0=h264,1=hevc)`, `u16 width`, `u16 height`, then codec-config bytes (AnnexB SPS/PPS/VPS) |
+| 0x03 | FRAME  | `u64 ptsUs`, `u8 flags (1=key)`, AnnexB access unit |
+| 0x04 | STATE  | UTF-8 JSON of the current settings + `battery`, `tempC` |
+
+PC -> phone
+| type | name    | payload |
+|------|---------|---------|
+| 0x10 | CONTROL | UTF-8 JSON, any subset of `{camera, width, height, fps, codec, bitrate, zoom, af:"auto|lock|manual", focus, ae:"auto|lock", ev, awb:"auto|lock", torch, stab, keyframe}` |
+| 0x11 | PING    | empty |
+
+Discovery: phone broadcasts `{"rnglens":1,"name":...,"port":38440}` to UDP 255.255.255.255:38441 once per second while idle.
+
+## Test bench (headless, runs in CI / cloud, no phone)
+
+`tools/fakephone`: a JVM program that reuses the phone's own `Protocol.java`, feeds it H.264 from
+`ffmpeg -f lavfi testsrc2`, serves TCP :38440 and logs CONTROL messages. The desktop app in
+`--headless` mode connects, decodes, dumps a PNG. Green = PNG matches the test pattern size and is not blank.
+
+## Repo
+
+```
+android/   phone app + build.sh
+desktop/   PC app (CMake; Linux native, Windows via mingw toolchain file)
+third_party/softcam  rebranded Softcam (own CLSID, name "rng-lens")
+tools/     fakephone, bench script
+docs/
+```
+License MIT. FFmpeg is linked dynamically (LGPL).
