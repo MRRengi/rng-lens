@@ -30,7 +30,7 @@ import java.util.Collections;
 import java.util.List;
 
 /** Owns the server socket, the discovery beacon, the current PC link and the camera pipeline. */
-final class Engine implements Link.Listener, Pipeline.Sink {
+final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
     interface Status {
         void onStatus(String line, boolean streaming);
     }
@@ -42,6 +42,8 @@ final class Engine implements Link.Listener, Pipeline.Sink {
     private final HandlerThread thread;
     private final Handler handler;
     private final Pipeline pipeline;
+    private final AudioPipeline audio = new AudioPipeline(this);
+    private boolean audioOn; // camera thread only
     private final Settings settings = new Settings();
     private Catalog catalog;
     private volatile Link link;
@@ -111,6 +113,7 @@ final class Engine implements Link.Listener, Pipeline.Sink {
             @Override
             public void run() {
                 pipeline.stop();
+                audio.stop();
                 releaseWifiLock();
             }
         });
@@ -217,11 +220,42 @@ final class Engine implements Link.Listener, Pipeline.Sink {
             hello.put("proto", Protocol.VERSION);
             hello.put("device", Build.MANUFACTURER + " " + Build.MODEL);
             hello.put("state", stateJson());
+            hello.put("mic", micAllowed());
             l.send(Protocol.json(Protocol.HELLO, hello.toString()));
         } catch (JSONException ignored) {
         }
         acquireWifiLock();
         startPipeline();
+        updateAudio(true);
+    }
+
+    private boolean micAllowed() {
+        return context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    /** Runs on the camera thread. Starts, restarts or stops the microphone to match the settings. */
+    private void updateAudio(boolean restart) {
+        boolean want = link != null && settings.audio && micAllowed();
+        if (want && (restart || !audioOn)) {
+            audio.start("raw".equals(settings.mic));
+            audioOn = true;
+        } else if (!want && audioOn) {
+            audio.stop();
+            audioOn = false;
+        }
+    }
+
+    @Override
+    public void onAudioConfig(byte[] message) {
+        Link l = link;
+        if (l != null) l.send(message);
+    }
+
+    @Override
+    public void onAudio(byte[] message) {
+        Link l = link;
+        if (l != null) l.sendAudio(message);
     }
 
     @Override
@@ -243,6 +277,7 @@ final class Engine implements Link.Listener, Pipeline.Sink {
                     if ((change & Settings.CHANGE_BITRATE) != 0) pipeline.setBitrate(settings.bitrate);
                     if ((change & Settings.CHANGE_KEYFRAME) != 0) pipeline.requestKeyframe();
                 }
+                if ((change & Settings.CHANGE_AUDIO) != 0) updateAudio(true);
                 sendState();
             }
         });
@@ -265,7 +300,8 @@ final class Engine implements Link.Listener, Pipeline.Sink {
             public void run() {
                 if (link != l) return;
                 link = null;
-                pipeline.stop(); // nobody watching: camera and encoder off
+                pipeline.stop(); // nobody watching: camera, encoder and mic off
+                updateAudio(false);
                 releaseWifiLock();
                 report();
             }

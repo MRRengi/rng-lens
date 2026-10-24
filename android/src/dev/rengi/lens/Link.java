@@ -99,6 +99,16 @@ public final class Link {
         if (!queue.offer(new Packet(message, message.length, false))) close();
     }
 
+    /**
+     * Audio is tiny next to video, so it is never thinned out with the video; it is only dropped when
+     * the link is hopelessly behind (then old audio is worthless anyway).
+     */
+    public void sendAudio(byte[] message) {
+        if (closed.get()) return;
+        if (queue.size() > 48) return;
+        queue.offer(new Packet(message, message.length, false));
+    }
+
     /** Called from the encoder thread with the codec's own output buffer, positioned at the data. */
     public void sendFrame(ByteBuffer data, int size, long ptsUs, boolean key) {
         if (closed.get()) return;

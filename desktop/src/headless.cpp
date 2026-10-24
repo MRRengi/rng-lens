@@ -1,6 +1,8 @@
 #include "headless.h"
 
+#include <algorithm>
 #include <chrono>
+#include <mutex>
 #include <cstdio>
 #include <thread>
 #include <vector>
@@ -20,10 +22,36 @@ extern "C" {
 
 using nlohmann::json;
 
-int runHeadless(const std::string& host, int port, int frames, const std::string& png, const std::string& control) {
+static bool writeWav(const std::string& path, const std::vector<float>& stereo, int rate) {
+    FILE* f = fopen(path.c_str(), "wb");
+    if (!f) return false;
+    uint32_t frames = (uint32_t)(stereo.size() / 2), data = frames * 4;
+    auto u32 = [&](uint32_t v) { fwrite(&v, 4, 1, f); };
+    auto u16 = [&](uint16_t v) { fwrite(&v, 2, 1, f); };
+    fwrite("RIFF", 1, 4, f); u32(36 + data); fwrite("WAVEfmt ", 1, 8, f);
+    u32(16); u16(1); u16(2); u32((uint32_t)rate); u32((uint32_t)rate * 4); u16(4); u16(16);
+    fwrite("data", 1, 4, f); u32(data);
+    for (float v : stereo) {
+        int16_t s = (int16_t)std::max(-32768.f, std::min(32767.f, v * 32767.f));
+        fwrite(&s, 2, 1, f);
+    }
+    fclose(f);
+    return true;
+}
+
+int runHeadless(const std::string& host, int port, int frames, const std::string& png, const std::string& control,
+                const std::string& wav) {
     plat::netInit();
     Decoder decoder;
     Connection conn(decoder);
+    std::mutex audioM;
+    std::vector<float> audio;
+    int audioRate = 48000;
+    conn.onAudio = [&](const float* f, int n, int rate) {
+        std::lock_guard<std::mutex> lock(audioM);
+        audio.insert(audio.end(), f, f + n * 2);
+        audioRate = rate;
+    };
     conn.connect(host, port, false);
 
     auto t0 = std::chrono::steady_clock::now();
@@ -46,7 +74,13 @@ int runHeadless(const std::string& host, int port, int frames, const std::string
             if (!j.is_discarded()) conn.sendControl(j);
             sentControl = true;
         }
-        if ((int)decoder.framesDecoded() >= frames && last) break;
+        size_t audioFrames;
+        {
+            std::lock_guard<std::mutex> lock(audioM);
+            audioFrames = audio.size() / 2;
+        }
+        bool audioDone = wav.empty() || audioFrames >= (size_t)audioRate * 2;
+        if ((int)decoder.framesDecoded() >= frames && last && audioDone) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
     if (AVFrame* f = decoder.takeLatest()) {
@@ -78,7 +112,18 @@ int runHeadless(const std::string& host, int port, int frames, const std::string
         if (!stbi_write_png(png.c_str(), w, h, 3, rgb.data(), w * 3)) rc = 4;
     }
     av_frame_free(&last);
+    std::string acodec = conn.audioCodec();
     conn.disconnect();
+    if (!wav.empty()) {
+        std::lock_guard<std::mutex> lock(audioM);
+        double secs = audio.size() / 2.0 / audioRate;
+        printf("{\"audio\":\"%s\",\"audioSeconds\":%.2f,\"rate\":%d}\n", acodec.c_str(), secs, audioRate);
+        if (secs < 1.0) {
+            fprintf(stderr, "FAIL: only %.2f s of audio\n", secs);
+            rc = 5;
+        }
+        writeWav(wav, audio, audioRate);
+    }
     if (rc != 0) fprintf(stderr, "FAIL: decoded %llu of %d frames\n", (unsigned long long)decoded, frames);
     return rc;
 }

@@ -18,6 +18,11 @@ struct Prefs {
     int outHeight = 1080;
     int outFps = 30;
     bool virtualCamera = true;
+    bool audio = true;            // stream the phone microphone
+    std::string micMode = "voice"; // voice | raw
+    std::string audioDevice;       // empty = system default output
+    float volume = 1.f;
+    bool muted = false;
     nlohmann::json phone = nlohmann::json::object(); // camera/width/height/fps/codec/bitrate to ask for on connect
 
     void load();

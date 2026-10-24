@@ -13,7 +13,13 @@ mirror, filters, virtual camera) runs on the PC.
 - Mirror / flip / rotate on the PC side (free for the phone).
 - Phone stays cool: no CPU frame copies, no preview rendering, black screen while streaming.
 
-v2 (not now): phone mic as an audio device, filters, Windows 11 Media Foundation virtual camera, iOS, macOS.
+Sound (v0.2): phone mic, 48 kHz mono, Opus on Android 10+ and AAC-LC before. "voice" = communication
+source + echo cancel / noise suppression / AGC, "raw" = unprocessed source. The PC plays it to any output
+device through a 60 ms jitter buffer (skips ahead past 220 ms, trims clock drift ~0.2%). A system
+microphone device would need a Microsoft-signed kernel driver, so it is out of scope: users route it
+with VB-Cable.
+
+Later: filters, Windows 11 Media Foundation virtual camera, iOS, macOS.
 
 ## Architecture
 
@@ -60,11 +66,13 @@ Phone -> PC
 | 0x02 | CONFIG | `u8 codec (0=h264,1=hevc)`, `u16 width`, `u16 height`, then codec-config bytes (AnnexB SPS/PPS/VPS) |
 | 0x03 | FRAME  | `u64 ptsUs`, `u8 flags (1=key)`, AnnexB access unit |
 | 0x04 | STATE  | UTF-8 JSON of the current settings + `battery`, `tempC` |
+| 0x05 | AUDIO_CONFIG | `u8 codec (0=opus,1=aac)`, `u32 sampleRate`, `u8 channels`, codec config (OpusHead / AudioSpecificConfig, may be empty) |
+| 0x06 | AUDIO  | `u64 ptsUs`, one encoded packet (20 ms Opus or 1024-sample AAC) |
 
 PC -> phone
 | type | name    | payload |
 |------|---------|---------|
-| 0x10 | CONTROL | UTF-8 JSON, any subset of `{camera, width, height, fps, codec, bitrate, zoom, af:"auto|lock|manual", focus, ae:"auto|lock", ev, awb:"auto|lock", torch, stab, keyframe}` |
+| 0x10 | CONTROL | UTF-8 JSON, any subset of `{camera, width, height, fps, codec, bitrate, zoom, af:"auto|lock|manual", focus, ae:"auto|lock", ev, awb:"auto|lock", torch, stab, keyframe, audio, mic:"voice|raw"}` |
 | 0x11 | PING    | empty |
 
 Discovery: phone broadcasts `{"rnglens":1,"name":...,"port":38440}` to UDP 255.255.255.255:38441 once per second while idle.

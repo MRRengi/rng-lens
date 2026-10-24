@@ -12,9 +12,11 @@ rm -rf "$OUT" && mkdir -p "$OUT/classes"
 javac -nowarn -d "$OUT/classes" "$ROOT/android/src/dev/rengi/lens/Protocol.java" \
   "$ROOT/android/src/dev/rengi/lens/Link.java" "$ROOT/tools/fakephone/FakePhone.java" 2>&1 | grep -v JAVA_TOOL_OPTIONS
 
-java -cp "$OUT/classes" FakePhone $PORT > "$OUT/fakephone.log" 2>&1 &
+java -cp "$OUT/classes" FakePhone $PORT opus > "$OUT/fakephone.log" 2>&1 &
 PHONE=$!
-trap 'kill $PHONE 2>/dev/null' EXIT
+java -cp "$OUT/classes" FakePhone $((PORT+1)) aac > "$OUT/fakephone-aac.log" 2>&1 &
+PHONE2=$!
+trap 'kill $PHONE $PHONE2 2>/dev/null' EXIT
 sleep 1.5
 
 pass=0; fail=0
@@ -48,6 +50,20 @@ check h264-720p 1280x720 --frames 60
 check switch-to-1080p 1920x1080 --frames 90 --control '{"width":1920,"height":1080}'
 check hevc 1920x1080 --frames 60 --control '{"codec":1}'
 check back-to-h264-60fps 1280x720 --frames 120 --control '{"codec":0,"width":1280,"height":720,"fps":60}'
+
+tone() { # name, port, expected codec: the fake phone's 440 Hz must come out as 440 Hz
+  local name=$1 port=$2 codec=$3
+  if "$BIN" --headless --connect 127.0.0.1:$port --frames 30 --wav "$OUT/$name.wav" > "$OUT/$name.json" 2> "$OUT/$name.err" \
+     && grep -q "\"audio\":\"$codec\"" "$OUT/$name.json" \
+     && python3 "$ROOT/tools/check_tone.py" "$OUT/$name.wav" 440; then
+    echo "PASS $name"; pass=$((pass+1))
+  else
+    echo "FAIL $name: $(cat "$OUT/$name.err")"; fail=$((fail+1))
+  fi
+  grep audio "$OUT/$name.json"
+}
+tone sound-opus $PORT Opus
+tone sound-aac $((PORT+1)) AAC
 
 grep CONTROL "$OUT/fakephone.log" | sed 's/^/  phone got: /'
 echo "bench: $pass passed, $fail failed"

@@ -5,6 +5,7 @@
 #include "app.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -20,6 +21,7 @@
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 
+#include "audio.h"
 #include "connection.h"
 #include "decoder.h"
 #include "discovery.h"
@@ -51,6 +53,13 @@ T jv(const json& j, const char* key, const T& def) {
     }
 }
 inline std::string jv(const json& j, const char* key, const char* def) { return jv<std::string>(j, key, std::string(def)); }
+
+// Coloured text that wraps at the panel edge (long hints and errors).
+inline void wrapped(const ImVec4& c, const char* text) {
+    ImGui::PushStyleColor(ImGuiCol_Text, c);
+    ImGui::TextWrapped("%s", text);
+    ImGui::PopStyleColor();
+}
 
 const ImVec4 kAccent = ImVec4(1.00f, 0.38f, 0.25f, 1.00f);
 const ImVec4 kMuted = ImVec4(0.55f, 0.55f, 0.60f, 1.00f);
@@ -105,6 +114,13 @@ public:
         restartVcam();
         disc_.start();
         conn_.onActivity = [] { glfwPostEmptyEvent(); };
+        conn_.onAudio = [this](const float* f, int n, int rate) {
+            audioRate_ = rate;
+            audio_.push(f, n);
+        };
+        audio_.setVolume(prefs_.volume);
+        audio_.setMuted(prefs_.muted);
+        openAudio();
         snprintf(ipBuf_, sizeof(ipBuf_), "%s", prefs_.lastHost.c_str());
         if (!opt_.connectHost.empty()) connectTo(opt_.connectHost, opt_.connectPort);
 
@@ -115,6 +131,7 @@ public:
 
         conn_.disconnect();
         disc_.stop();
+        audio_.close();
         if (vcam_) vcam_->stop();
         prefs_.save();
         renderer_.shutdown();
@@ -300,7 +317,11 @@ private:
             seenHello_ = conn_.helloSerial();
             hello_ = conn_.hello();
             // Ask for what the user picked last time.
-            if (!prefs_.phone.empty()) conn_.sendControl(prefs_.phone);
+            json want = prefs_.phone.is_object() ? prefs_.phone : json::object();
+            want["audio"] = prefs_.audio;
+            want["mic"] = prefs_.micMode;
+            conn_.sendControl(want);
+            audio_.clear();
         }
         if (conn_.stateSerial() != seenState_ && !ImGui::IsAnyItemActive()) {
             seenState_ = conn_.stateSerial();
@@ -471,7 +492,7 @@ private:
         ImGui::SetWindowFontScale(1.f);
         ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImGui::TextColored(kMuted, " v0.1");
+        ImGui::TextColored(kMuted, " v" RNGLENS_VERSION);
 
         drawConnection();
         if (conn_.state() == Connection::State::Streaming && hello_.is_object() && !hello_.empty()) {
@@ -479,6 +500,7 @@ private:
             drawPicture();
         }
         drawOutput();
+        drawAudio();
         drawStats();
     }
 
@@ -496,7 +518,7 @@ private:
             }
             return;
         }
-        if (st == Connection::State::Failed) ImGui::TextColored(kBad, "%s", conn_.error().c_str());
+        if (st == Connection::State::Failed) wrapped(kBad, conn_.error().c_str());
 
         std::vector<Discovery::Phone> phones = disc_.phones();
         if (phones.empty()) {
@@ -732,13 +754,88 @@ private:
         }
         if (save) prefs_.save();
         if (prefs_.virtualCamera) {
-            if (!vcamWhy_.empty()) ImGui::TextColored(kBad, "%s", vcamWhy_.c_str());
+            if (!vcamWhy_.empty()) wrapped(kBad, vcamWhy_.c_str());
             else if (vcam_ && vcam_->running())
             {
                 if (vcam_->watched()) ImGui::TextColored(kGood, "An app is using the camera (%llu frames sent)", (unsigned long long)vcamSent_);
                 else ImGui::TextColored(kMuted, "Ready: pick \"rng-lens\" in Zoom, Discord, OBS...");
             }
         }
+    }
+
+    void openAudio() {
+        audioWhy_.clear();
+        if (!audio_.open(prefs_.audioDevice, audioRate_)) {
+            audioWhy_ = "Could not open the sound output";
+            if (!prefs_.audioDevice.empty() && audio_.open("", audioRate_)) audioWhy_ = "Saved output is gone, using the default";
+        }
+        openedRate_ = audioRate_;
+    }
+
+    void drawAudio() {
+        if (audioRate_ != openedRate_) openAudio(); // stream switched sample rate
+        ImGui::SeparatorText("Sound");
+        bool save = false;
+        if (ImGui::Checkbox("Phone microphone", &prefs_.audio)) {
+            conn_.sendControl({{"audio", prefs_.audio}});
+            save = true;
+        }
+        if (prefs_.audio) {
+            ImGui::SameLine();
+            if (radio("Voice##mic", prefs_.micMode, "voice")) {
+                conn_.sendControl({{"mic", prefs_.micMode}});
+                save = true;
+            }
+            ImGui::SameLine();
+            if (radio("Raw##mic", prefs_.micMode, "raw")) {
+                conn_.sendControl({{"mic", prefs_.micMode}});
+                save = true;
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Voice: noise suppression + echo cancel (calls)\nRaw: untouched sound (music, streams)");
+            if (!hello_.empty() && !jv(hello_, "mic", true))
+                wrapped(kBad, "Microphone access is off on the phone (Settings > Apps > rng-lens)");
+
+            std::string cur = audio_.isOpen() ? audio_.deviceName() : std::string("(none)");
+            ImGui::TextColored(kMuted, "Play to");
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::BeginCombo("##aout", cur.c_str())) {
+                if (devices_.empty() || ImGui::IsWindowAppearing()) devices_ = audio_.devices();
+                if (ImGui::Selectable("System default", prefs_.audioDevice.empty())) {
+                    prefs_.audioDevice.clear();
+                    openAudio();
+                    save = true;
+                }
+                for (const AudioOutput::Device& d : devices_) {
+                    if (ImGui::Selectable(d.name.c_str(), d.name == prefs_.audioDevice)) {
+                        prefs_.audioDevice = d.name;
+                        openAudio();
+                        save = true;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            if (!audioWhy_.empty()) wrapped(kBad, audioWhy_.c_str());
+            wrapped(kMuted, "Tip: pick \"CABLE Input\" (VB-Cable) here to use the phone as a mic in Zoom/Discord.");
+
+            float vol = prefs_.volume * 100.f;
+            ImGui::SetNextItemWidth(-90);
+            if (ImGui::SliderFloat("##vol", &vol, 0.f, 200.f, "%.0f%%")) {
+                prefs_.volume = vol / 100.f;
+                audio_.setVolume(prefs_.volume);
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit()) save = true;
+            ImGui::SameLine();
+            if (ImGui::Checkbox("Mute", &prefs_.muted)) {
+                audio_.setMuted(prefs_.muted);
+                save = true;
+            }
+            // Level meter with a short decay so it reads like a real one.
+            meter_ = std::max(audio_.peak(), meter_ * 0.85f);
+            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, meter_ > 0.95f ? kBad : kAccent);
+            ImGui::ProgressBar(std::min(1.f, meter_), ImVec2(-1, 6), "");
+            ImGui::PopStyleColor();
+        }
+        if (save) prefs_.save();
     }
 
     void drawStats() {
@@ -754,6 +851,9 @@ private:
         if (bat >= 0) {
             ImGui::Text("Phone: %d%%%s   %.0f C", bat, jv(pstate_, "charging", false) ? " (charging)" : "", temp);
         }
+        std::string ac = conn_.audioCodec();
+        if (!ac.empty()) ImGui::Text("Sound: %s, %.0f ms buffered, %llu dropouts", ac.c_str(), audio_.bufferedMs(),
+                                     (unsigned long long)audio_.underruns());
         int dropped = jv(pstate_, "dropped", 0);
         if (dropped > 0) ImGui::TextColored(kMuted, "Dropped on phone: %d (network too slow)", dropped);
     }
@@ -766,6 +866,12 @@ private:
     Discovery disc_;
     Renderer renderer_;
     std::unique_ptr<VirtualCamera> vcam_;
+    AudioOutput audio_;
+    std::vector<AudioOutput::Device> devices_;
+    std::string audioWhy_;
+    std::atomic<int> audioRate_{48000};
+    int openedRate_ = 48000;
+    float meter_ = 0.f;
     std::string vcamWhy_, usbMsg_;
     char ipBuf_[64] = {0};
 

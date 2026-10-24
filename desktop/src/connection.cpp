@@ -48,6 +48,11 @@ std::string Connection::error() const {
     return error_;
 }
 
+std::string Connection::audioCodec() const {
+    std::lock_guard<std::mutex> lock(m_);
+    return audioCodec_;
+}
+
 std::string Connection::peer() const {
     std::lock_guard<std::mutex> lock(m_);
     return peer_;
@@ -95,6 +100,7 @@ void Connection::run(std::string host, int port) {
     }
     sock_ = s;
     std::vector<uint8_t> payload;
+    std::vector<float> pcm;
     uint8_t type = 0;
     bool configured = false;
     bool sawKey = false;
@@ -150,12 +156,33 @@ void Connection::run(std::string host, int port) {
                 if (onActivity && decoder_.framesDecoded() != before) onActivity();
                 break;
             }
+            case proto::AUDIO_CONFIG: {
+                if (payload.size() < 6) break;
+                int codec = payload[0], rate = (int)proto::u32(&payload[1]), ch = payload[5];
+                bool ok = audio_.configure(codec, rate, ch, payload.data() + 6, payload.size() - 6);
+                std::lock_guard<std::mutex> lock(m_);
+                audioCodec_ = ok ? audio_.description() : std::string("unsupported");
+                break;
+            }
+            case proto::AUDIO: {
+                if (payload.size() < 9) break;
+                audioPackets_++;
+                pcm.clear();
+                audio_.decode(payload.data() + 8, payload.size() - 8, pcm);
+                if (onAudio && !pcm.empty()) onAudio(pcm.data(), (int)(pcm.size() / 2), audio_.sampleRate());
+                break;
+            }
             default:
                 break;
         }
     }
     sock_t mine = sock_.exchange(kBadSocket);
     plat::closeSocket(mine);
+    audio_.close();
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        audioCodec_.clear();
+    }
     if (!stop_) {
         std::lock_guard<std::mutex> lock(m_);
         error_ = "Phone disconnected";

@@ -10,6 +10,7 @@ final class Settings {
     static final int CHANGE_BITRATE = 2; // live encoder parameter
     static final int CHANGE_RESTART = 4; // camera/encoder rebuild
     static final int CHANGE_KEYFRAME = 8;
+    static final int CHANGE_AUDIO = 16; // microphone restart
 
     String camera = null; // null = first back camera
     int width = 1920;
@@ -25,6 +26,8 @@ final class Settings {
     String awb = "auto"; // auto | lock
     boolean torch = false;
     boolean stab = true;
+    boolean audio = true;
+    String mic = "voice"; // voice = noise suppression + echo cancel, raw = untouched
 
     int apply(JSONObject j) {
         int c = CHANGE_NONE;
@@ -67,6 +70,13 @@ final class Settings {
             stab = s;
             c |= CHANGE_REQUEST;
         }
+        boolean au = j.optBoolean("audio", audio);
+        String mi = j.optString("mic", mic);
+        if (au != audio || !mi.equals(mic)) {
+            audio = au;
+            mic = mi;
+            c |= CHANGE_AUDIO;
+        }
         if (j.optBoolean("keyframe", false)) c |= CHANGE_KEYFRAME;
         return c;
     }
@@ -88,6 +98,8 @@ final class Settings {
             j.put("awb", awb);
             j.put("torch", torch);
             j.put("stab", stab);
+            j.put("audio", audio);
+            j.put("mic", mic);
         } catch (JSONException ignored) {
         }
         return j;

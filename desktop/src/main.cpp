@@ -13,7 +13,7 @@
 
 int main(int argc, char** argv) {
     bool headless = false;
-    std::string host = "127.0.0.1", png, control;
+    std::string host = "127.0.0.1", png, control, wav;
     AppOptions opt;
     bool connect = false;
     int port = proto::kPort, frames = 120;
@@ -35,8 +35,9 @@ int main(int argc, char** argv) {
         } else if (a == "--frames") frames = atoi(next().c_str());
         else if (a == "--png") png = next();
         else if (a == "--control") control = next();
+        else if (a == "--wav") wav = next();
     }
-    if (headless) return runHeadless(host, port, frames, png, control);
+    if (headless) return runHeadless(host, port, frames, png, control, wav);
     Prefs prefs;
     prefs.load();
     if (connect) {

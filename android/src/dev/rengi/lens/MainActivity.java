@@ -54,16 +54,19 @@ public final class MainActivity extends Activity implements Engine.Status {
                 engine.setDeviceOrientation(((deg + 45) / 90 * 90) % 360);
             }
         };
-        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+        boolean cam = checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+        boolean mic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+        if (cam && mic) {
             startEngine();
         } else {
-            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA);
+            requestPermissions(new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, REQ_CAMERA);
         }
     }
 
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
-        if (code == REQ_CAMERA && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+        // The microphone is optional: without it rng-lens streams video only.
+        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startEngine();
         } else {
             statusView.setText("rng-lens needs camera access to work.\nGrant it in Settings > Apps > rng-lens.");

@@ -19,6 +19,8 @@ enum Type : uint8_t {
     CONFIG = 0x02,
     FRAME = 0x03,
     STATE = 0x04,
+    AUDIO_CONFIG = 0x05,
+    AUDIO = 0x06,
     CONTROL = 0x10,
     PING = 0x11,
 };

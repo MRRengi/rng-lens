@@ -9,6 +9,7 @@
 #include <string>
 #include <thread>
 
+#include "audio.h"
 #include "json.hpp"
 #include "platform.h"
 
@@ -23,6 +24,8 @@ public:
     // Called on the network thread after a frame is decoded or the phone state changes
     // (the GUI uses it to wake its event loop). Set before connect().
     std::function<void()> onActivity;
+    // Decoded phone audio, interleaved stereo float at `rate` Hz. Called on the network thread. Set before connect().
+    std::function<void(const float* frames, int count, int rate)> onAudio;
     ~Connection();
 
     void connect(const std::string& host, int port, bool hardwareDecode);
@@ -45,6 +48,8 @@ public:
     uint64_t framesReceived() const { return framesIn_.load(); }
     int streamWidth() const { return width_.load(); }
     int streamHeight() const { return height_.load(); }
+    std::string audioCodec() const;
+    uint64_t audioPackets() const { return audioPackets_.load(); }
 
 private:
     void run(std::string host, int port);
@@ -63,7 +68,9 @@ private:
     std::atomic<uint64_t> helloSerial_{0}, stateSerial_{0};
 
     std::mutex sendM_;
-    std::atomic<uint64_t> bytes_{0}, framesIn_{0};
+    std::atomic<uint64_t> bytes_{0}, framesIn_{0}, audioPackets_{0};
+    AudioDecoder audio_;
+    std::string audioCodec_;
     std::atomic<int> width_{0}, height_{0};
     int64_t lastKeyRequestMs_ = 0;
 };

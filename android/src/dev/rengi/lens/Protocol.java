@@ -15,11 +15,16 @@ public final class Protocol {
     public static final int CONFIG = 0x02;
     public static final int FRAME = 0x03;
     public static final int STATE = 0x04;
+    public static final int AUDIO_CONFIG = 0x05;
+    public static final int AUDIO = 0x06;
     public static final int CONTROL = 0x10;
     public static final int PING = 0x11;
 
     public static final int CODEC_H264 = 0;
     public static final int CODEC_HEVC = 1;
+
+    public static final int ACODEC_OPUS = 0;
+    public static final int ACODEC_AAC = 1;
 
     public static final int HEADER = 5;
     public static final int FRAME_PREFIX = 9;
@@ -70,6 +75,25 @@ public final class Protocol {
         putU16(p, 3, height);
         System.arraycopy(csd, off, p, 5, len);
         return message(CONFIG, p);
+    }
+
+    /** AUDIO_CONFIG: u8 codec, u32 sampleRate, u8 channels, codec-specific config. */
+    public static byte[] audioConfig(int codec, int sampleRate, int channels, byte[] csd, int off, int len) {
+        byte[] p = new byte[6 + len];
+        p[0] = (byte) codec;
+        putU32(p, 1, sampleRate);
+        p[5] = (byte) channels;
+        System.arraycopy(csd, off, p, 6, len);
+        return message(AUDIO_CONFIG, p);
+    }
+
+    /** AUDIO: u64 ptsUs, one encoded packet. */
+    public static byte[] audio(long ptsUs, byte[] data, int off, int len) {
+        byte[] m = new byte[HEADER + 8 + len];
+        putHeader(m, 0, AUDIO, 8 + len);
+        putU64(m, HEADER, ptsUs);
+        System.arraycopy(data, off, m, HEADER + 8, len);
+        return m;
     }
 
     public static final class Message {

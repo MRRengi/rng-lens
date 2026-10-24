@@ -1,0 +1,106 @@
+name: build
+
+# Every push / PR: build everything and run the headless bench.
+# A tag like v0.2.0: the same, then publish a GitHub Release with the APK and the Windows installer.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            V="${GITHUB_REF#refs/tags/v}"
+          else
+            V="$(grep -oP 'project\(rng-lens VERSION \K[0-9.]+' desktop/CMakeLists.txt)"
+          fi
+          IFS=. read -r MA MI PA <<< "$V"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "code=$((MA * 10000 + MI * 100 + PA))" >> "$GITHUB_OUTPUT"
+
+      - name: Install toolchains
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq android-sdk-platform-23 aapt dalvik-exchange zipalign apksigner \
+            mingw-w64 g++-mingw-w64-x86-64-posix g++-mingw-w64-i686-posix nasm cmake nsis \
+            libavcodec-dev libavutil-dev libswscale-dev libswresample-dev libglfw3-dev \
+            ffmpeg python3-pil python3-numpy
+
+      - name: Cache FFmpeg for Windows
+        id: ffcache
+        uses: actions/cache@v4
+        with:
+          path: third_party/ffmpeg-win
+          key: ffmpeg-win-${{ hashFiles('tools/build-ffmpeg-windows.sh') }}
+
+      - name: Build FFmpeg for Windows
+        if: steps.ffcache.outputs.cache-hit != 'true'
+        run: tools/build-ffmpeg-windows.sh
+
+      - name: Android app
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          VERSION_NAME: ${{ steps.ver.outputs.version }}
+          VERSION_CODE: ${{ steps.ver.outputs.code }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            export KEYSTORE="$RUNNER_TEMP/release.keystore" KEY_PASS="$KEYSTORE_PASS"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "::error::Release builds need the ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASS / ANDROID_KEY_ALIAS secrets"
+            exit 1
+          else
+            unset KEYSTORE_PASS KEY_ALIAS
+          fi
+          android/build.sh
+          mkdir -p dist && cp android/build/rng-lens.apk "dist/rng-lens-${{ steps.ver.outputs.version }}.apk"
+
+      - name: Desktop (Linux) and bench
+        run: |
+          cmake -S desktop -B desktop/build-linux
+          cmake --build desktop/build-linux -j"$(nproc)"
+          tools/bench.sh
+
+      - name: Desktop (Windows)
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          cmake -S desktop -B desktop/build-win -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64.cmake -DRNGLENS_VERSION="$V"
+          cmake --build desktop/build-win -j"$(nproc)"
+          cmake -S desktop -B desktop/build-win32 -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w32.cmake -DRNGLENS_VCAM_ONLY=ON
+          cmake --build desktop/build-win32 -j"$(nproc)"
+
+      - name: Windows installer
+        run: |
+          curl -sSL -o "$RUNNER_TEMP/pt.zip" https://dl.google.com/android/repository/platform-tools-latest-windows.zip
+          unzip -q "$RUNNER_TEMP/pt.zip" -d "$RUNNER_TEMP"
+          tools/package-windows.sh "${{ steps.ver.outputs.version }}" "$RUNNER_TEMP/platform-tools"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rng-lens-${{ steps.ver.outputs.version }}
+          path: |
+            dist/*.apk
+            dist/*.exe
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          gh release create "v$V" "dist/rng-lens-setup-$V.exe" "dist/rng-lens-$V.apk" \
+            --title "rng-lens $V" --notes-file packaging/release-notes.md

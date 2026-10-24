@@ -28,9 +28,19 @@ public final class FakePhone implements Link.Listener {
     private final Object restartLock = new Object();
     private volatile int generation;
 
+    private final boolean aac; // which audio codec this fake phone "has": Opus (Android 10+) or AAC
+    private volatile Process audioProc;
+    private volatile int audioGen;
+
+    FakePhone(boolean aac) {
+        this.aac = aac;
+    }
+
+    /** java FakePhone [port] [opus|aac] */
     public static void main(String[] args) throws Exception {
         int port = args.length > 0 ? Integer.parseInt(args[0]) : Protocol.PORT;
-        new FakePhone().serve(port);
+        boolean aac = args.length > 1 && args[1].equalsIgnoreCase("aac");
+        new FakePhone(aac).serve(port);
     }
 
     private void serve(int port) throws IOException {
@@ -49,6 +59,7 @@ public final class FakePhone implements Link.Listener {
             log("PC connected from " + l.peer());
             l.send(Protocol.json(Protocol.HELLO, hello()));
             startStream();
+            startAudio();
             startStateTicker(l);
         }
     }
@@ -142,10 +153,115 @@ public final class FakePhone implements Link.Listener {
         if (l != link) return;
         link = null;
         stopStream();
+        stopAudio();
         log("PC disconnected");
     }
 
     // ---- "camera + encoder"
+
+    // ---- "microphone": a 440 Hz tone through ffmpeg, framed like MediaCodec output
+
+    private void stopAudio() {
+        audioGen++;
+        Process p = audioProc;
+        audioProc = null;
+        if (p != null) p.destroyForcibly();
+    }
+
+    private void startAudio() {
+        stopAudio();
+        final int gen = audioGen;
+        String[] cmd = aac
+                ? new String[]{"ffmpeg", "-hide_banner", "-loglevel", "error", "-re", "-f", "lavfi", "-i",
+                        "sine=frequency=440:sample_rate=48000", "-ac", "1", "-c:a", "aac", "-b:a", "128k", "-flush_packets", "1", "-f", "adts", "-"}
+                : new String[]{"ffmpeg", "-hide_banner", "-loglevel", "error", "-re", "-f", "lavfi", "-i",
+                        "sine=frequency=440:sample_rate=48000", "-ac", "1", "-c:a", "libopus", "-b:a", "64k",
+                        "-frame_duration", "20", "-application", "lowdelay", "-page_duration", "20000", "-flush_packets", "1", "-f", "ogg", "-"};
+        try {
+            audioProc = new ProcessBuilder(cmd).redirectError(ProcessBuilder.Redirect.INHERIT).start();
+        } catch (IOException e) {
+            log("audio ffmpeg failed: " + e);
+            return;
+        }
+        final InputStream in = new BufferedInputStream(audioProc.getInputStream(), 1 << 16);
+        Thread t = new Thread("audio") {
+            @Override
+            public void run() {
+                try {
+                    if (aac) pumpAdts(gen, in);
+                    else pumpOgg(gen, in);
+                } catch (IOException ignored) {
+                }
+            }
+        };
+        t.setDaemon(true);
+        t.start();
+        log("microphone: 440 Hz " + (aac ? "AAC" : "Opus"));
+    }
+
+    private void pumpAdts(int gen, InputStream in) throws IOException {
+        byte[] h = new byte[7];
+        long frames = 0;
+        boolean configSent = false;
+        while (gen == audioGen && readFully(in, h, 7)) {
+            boolean crc = (h[1] & 1) == 0;
+            int profile = (h[2] >> 6) & 3, sr = (h[2] >> 2) & 15, ch = ((h[2] & 1) << 2) | ((h[3] >> 6) & 3);
+            int len = ((h[3] & 3) << 11) | ((h[4] & 0xff) << 3) | ((h[5] & 0xff) >> 5);
+            if (crc && !readFully(in, new byte[2], 2)) return;
+            byte[] data = new byte[len - 7 - (crc ? 2 : 0)];
+            if (!readFully(in, data, data.length)) return;
+            Link l = link;
+            if (l == null) continue;
+            if (!configSent) {
+                int asc = ((profile + 1) << 11) | (sr << 7) | (ch << 3);
+                byte[] csd = {(byte) (asc >> 8), (byte) asc};
+                l.send(Protocol.audioConfig(Protocol.ACODEC_AAC, 48000, ch, csd, 0, 2));
+                configSent = true;
+            }
+            l.sendAudio(Protocol.audio(frames * 1_000_000L / 48000, data, 0, data.length));
+            frames += 1024;
+        }
+    }
+
+    /** Minimal Ogg demuxer: packet 0 is OpusHead (sent as config), packet 1 OpusTags (skipped). */
+    private void pumpOgg(int gen, InputStream in) throws IOException {
+        byte[] hdr = new byte[27];
+        ByteArrayOutputStream packet = new ByteArrayOutputStream();
+        int index = 0;
+        long frames = 0;
+        while (gen == audioGen && readFully(in, hdr, 27)) {
+            if (hdr[0] != 'O' || hdr[1] != 'g' || hdr[2] != 'g' || hdr[3] != 'S') return;
+            int segs = hdr[26] & 0xff;
+            byte[] table = new byte[segs];
+            if (!readFully(in, table, segs)) return;
+            for (int i = 0; i < segs; i++) {
+                int n = table[i] & 0xff;
+                byte[] seg = new byte[n];
+                if (!readFully(in, seg, n)) return;
+                packet.write(seg, 0, n);
+                if (n == 255) continue; // packet continues in the next segment
+                byte[] p = packet.toByteArray();
+                packet.reset();
+                Link l = link;
+                if (index == 0 && l != null) l.send(Protocol.audioConfig(Protocol.ACODEC_OPUS, 48000, 1, p, 0, p.length));
+                else if (index >= 2 && l != null) {
+                    l.sendAudio(Protocol.audio(frames * 1_000_000L / 48000, p, 0, p.length));
+                    frames += 960;
+                }
+                index++;
+            }
+        }
+    }
+
+    private static boolean readFully(InputStream in, byte[] b, int len) throws IOException {
+        int got = 0;
+        while (got < len) {
+            int n = in.read(b, got, len - got);
+            if (n < 0) return false;
+            got += n;
+        }
+        return true;
+    }
 
     private void stopStream() {
         synchronized (restartLock) {
