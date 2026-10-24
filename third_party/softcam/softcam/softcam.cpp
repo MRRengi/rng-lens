@@ -8,15 +8,26 @@
 
 
 // {ADB68203-9BA3-43EC-92B9-8328DFA6B196}
+// rng-lens: RNGLENS_VCAM_SECOND builds the second camera ("rng-lens 2") with its own CLSID.
+#ifdef RNGLENS_VCAM_SECOND
+// {D4EA6B25-9840-4EAD-8926-436701254668}
+DEFINE_GUID(CLSID_DShowSoftcam,
+0xd4ea6b25, 0x9840, 0x4ead, 0x89, 0x26, 0x43, 0x67, 0x01, 0x25, 0x46, 0x68);
+#else
 DEFINE_GUID(CLSID_DShowSoftcam,
 0xadb68203, 0x9ba3, 0x43ec, 0x92, 0xb9, 0x83, 0x28, 0xdf, 0xa6, 0xb1, 0x96);
+#endif
 
 
 namespace {
 
 // Setup data
 
+#ifdef RNGLENS_VCAM_SECOND
+const wchar_t FILTER_NAME[] = L"rng-lens 2";
+#else
 const wchar_t FILTER_NAME[] = L"rng-lens";
+#endif
 const GUID &FILTER_CLASSID = CLSID_DShowSoftcam;
 
 const AMOVIESETUP_MEDIATYPE s_pin_types[] =

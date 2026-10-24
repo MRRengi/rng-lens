@@ -53,6 +53,11 @@ final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
     private WifiManager.WifiLock wifiLock;
     private WifiManager.MulticastLock multicastLock;
     private int deviceOrientation;
+    private final ThermalPolicy thermal = new ThermalPolicy();
+    private Settings running_; // what the pipeline was last started with (after thermal limits)
+    private android.os.PowerManager.WakeLock wakeLock;
+    private java.lang.reflect.Method thermalStatusM, thermalHeadroomM;
+    private android.os.PowerManager powerManager;
     private long lastBytes, lastStatsAt;
 
     Engine(Context context, Status status) {
@@ -63,6 +68,19 @@ final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
         handler = new Handler(thread.getLooper());
         CameraManager cm = (CameraManager) this.context.getSystemService(Context.CAMERA_SERVICE);
         pipeline = new Pipeline(cm, handler, this);
+        powerManager = (android.os.PowerManager) this.context.getSystemService(Context.POWER_SERVICE);
+        try {
+            thermalStatusM = android.os.PowerManager.class.getMethod("getCurrentThermalStatus"); // API 29
+        } catch (Exception ignored) {
+        }
+        try {
+            thermalHeadroomM = android.os.PowerManager.class.getMethod("getThermalHeadroom", int.class); // API 30
+        } catch (Exception ignored) {
+        }
+    }
+
+    boolean connected() {
+        return link != null;
     }
 
     void start() {
@@ -115,6 +133,7 @@ final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
                 pipeline.stop();
                 audio.stop();
                 releaseWifiLock();
+                releaseWakeLock();
             }
         });
         thread.quitSafely();
@@ -225,6 +244,7 @@ final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
         } catch (JSONException ignored) {
         }
         acquireWifiLock();
+        acquireWakeLock();
         startPipeline();
         updateAudio(true);
     }
@@ -274,7 +294,8 @@ final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
                     startPipeline();
                 } else {
                     if ((change & Settings.CHANGE_REQUEST) != 0) pipeline.updateRequest(true);
-                    if ((change & Settings.CHANGE_BITRATE) != 0) pipeline.setBitrate(settings.bitrate);
+                    if ((change & Settings.CHANGE_BITRATE) != 0)
+                        pipeline.setBitrate(settings.bitrate, thermal.limits().bitrateScale);
                     if ((change & Settings.CHANGE_KEYFRAME) != 0) pipeline.requestKeyframe();
                 }
                 if ((change & Settings.CHANGE_AUDIO) != 0) updateAudio(true);
@@ -303,6 +324,7 @@ final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
                 pipeline.stop(); // nobody watching: camera, encoder and mic off
                 updateAudio(false);
                 releaseWifiLock();
+                releaseWakeLock();
                 report();
             }
         });
@@ -317,8 +339,45 @@ final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
             return;
         }
         settings.camera = cam.id;
-        pipeline.start(catalog, cam, settings);
+        running_ = effective();
+        pipeline.start(catalog, cam, running_, thermal.limits().bitrateScale);
         report();
+    }
+
+    /** The user's settings with the thermal limits applied. */
+    private Settings effective() {
+        Settings e = settings.copy();
+        ThermalPolicy.Limits lim = thermal.limits();
+        int[] wh = ThermalPolicy.clampSize(e.width, e.height, lim.maxPixels);
+        e.width = wh[0];
+        e.height = wh[1];
+        e.fps = Math.min(e.fps, lim.maxFps);
+        return e;
+    }
+
+    /** Runs on the camera thread every tick. */
+    private void readThermal() {
+        int status = -1;
+        float headroom = Float.NaN, batteryC = Float.NaN;
+        try {
+            if (thermalStatusM != null) status = (Integer) thermalStatusM.invoke(powerManager);
+        } catch (Exception ignored) {
+        }
+        try {
+            if (thermalHeadroomM != null) headroom = (Float) thermalHeadroomM.invoke(powerManager, 10);
+        } catch (Exception ignored) {
+        }
+        Intent bat = context.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        if (bat != null) batteryC = bat.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) / 10f;
+        if (!thermal.update(System.currentTimeMillis(), status, headroom, batteryC) || link == null || running_ == null) return;
+        Log.i(TAG, "thermal level " + thermal.limits().level + ": " + thermal.limits().describe());
+        Settings e = effective();
+        if (e.width != running_.width || e.height != running_.height || e.fps != running_.fps) {
+            startPipeline();
+        } else {
+            pipeline.setBitrate(settings.bitrate, thermal.limits().bitrateScale);
+        }
+        sendState();
     }
 
     @Override
@@ -353,6 +412,7 @@ final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
+            readThermal();
             if (link != null) sendState();
             report();
             handler.postDelayed(this, 2000);
@@ -375,6 +435,14 @@ final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
         }
         Link l = link;
         if (l != null) s.put("dropped", l.droppedFrames());
+        JSONObject t = new JSONObject();
+        ThermalPolicy.Limits lim = thermal.limits();
+        t.put("level", lim.level);
+        t.put("status", thermal.status());
+        if (!Float.isNaN(thermal.headroom())) t.put("headroom", (double) thermal.headroom());
+        t.put("throttled", lim.throttled());
+        t.put("limit", lim.describe());
+        s.put("thermal", t);
         return s;
     }
 
@@ -401,8 +469,9 @@ final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
         lastStatsAt = now;
         Catalog.Cam cam = pipeline.camera();
         String lens = cam == null ? "" : (cam.facing == CameraCharacteristics.LENS_FACING_FRONT ? "front" : "back") + " #" + cam.id;
+        String heat = thermal.limits().throttled() ? "\nHot: lowered to " + thermal.limits().describe() : "";
         status.onStatus("Streaming to " + l.peer() + "\n" + pipeline.width() + "x" + pipeline.height() + " @ " + pipeline.fps()
-                + " fps, " + lens + "\n" + String.format(java.util.Locale.US, "%.1f", kbps / 1000.0) + " Mbit/s", true);
+                + " fps, " + lens + "\n" + String.format(java.util.Locale.US, "%.1f", kbps / 1000.0) + " Mbit/s" + heat, true);
     }
 
     private static List<String> localIps() {
@@ -426,6 +495,21 @@ final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
         wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "rnglens");
         wifiLock.setReferenceCounted(false);
         wifiLock.acquire();
+    }
+
+    private void acquireWakeLock() {
+        if (wakeLock != null || powerManager == null) return;
+        // Keeps the CPU awake for the camera and network while the screen is locked.
+        wakeLock = powerManager.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "rnglens:stream");
+        wakeLock.setReferenceCounted(false);
+        wakeLock.acquire();
+    }
+
+    private void releaseWakeLock() {
+        if (wakeLock != null) {
+            wakeLock.release();
+            wakeLock = null;
+        }
     }
 
     private void releaseWifiLock() {

@@ -5,3 +5,5 @@ third_party/ffmpeg-win/
 tools/bench-out/
 tools/dshow-probe/*.exe
 *.keystore
+third_party/vision/
+tools/bench-effects/

@@ -19,7 +19,19 @@ device through a 60 ms jitter buffer (skips ahead past 220 ms, trims clock drift
 microphone device would need a Microsoft-signed kernel driver, so it is out of scope: users route it
 with VB-Cable.
 
-Later: filters, Windows 11 Media Foundation virtual camera, iOS, macOS.
+Heat guard (1.0): every 2 s the phone reads Android's thermal status (API 29+) and thermal headroom
+forecast (API 30+), or the battery temperature on older phones (ThermalPolicy.java). Heating reacts at
+once, cooling waits a minute per level. Levels: 2 = max 30 fps, 75% bitrate; 3 = max 1080p, 30 fps, 50%;
+4+ = max 720p, 24 fps, 40%. The phone's StreamService keeps the stream alive with the screen locked and
+exits when the screen is closed and no PC is connected.
+
+Effects (1.0, PC GPU): convert+rotate -> night (motion-adaptive temporal average) -> background
+(PP-HumanSeg mask at 192x192, ~20/s, refined by a joint-bilateral pass) -> skin smoothing (edge-aware,
+skin-coloured areas only) -> sharpen + colour + looks -> crop (auto-frame from YuNet faces, dead zone and
+eased follow) -> letterbox. Effects run at the resolution the output needs. ONNX Runtime is loaded at run
+time on a worker thread; without it (or the VC++ runtime) everything except background / auto-frame works.
+
+Later: Windows 11 Media Foundation virtual camera, iOS, macOS.
 
 ## Architecture
 
@@ -65,7 +77,7 @@ Phone -> PC
 | 0x01 | HELLO  | UTF-8 JSON: `{proto, device, cameras:[{id, facing, sensorOrientation, sizes:[[w,h]], fps:[[min,max]], zoom:[min,max], flash, afManual, minFocus}], state}` |
 | 0x02 | CONFIG | `u8 codec (0=h264,1=hevc)`, `u16 width`, `u16 height`, then codec-config bytes (AnnexB SPS/PPS/VPS) |
 | 0x03 | FRAME  | `u64 ptsUs`, `u8 flags (1=key)`, AnnexB access unit |
-| 0x04 | STATE  | UTF-8 JSON of the current settings + `battery`, `tempC` |
+| 0x04 | STATE  | UTF-8 JSON of the current settings + `battery`, `tempC`, `charging`, `thermal: {level, status, headroom, throttled, limit}` |
 | 0x05 | AUDIO_CONFIG | `u8 codec (0=opus,1=aac)`, `u32 sampleRate`, `u8 channels`, codec config (OpusHead / AudioSpecificConfig, may be empty) |
 | 0x06 | AUDIO  | `u64 ptsUs`, one encoded packet (20 ms Opus or 1024-sample AAC) |
 

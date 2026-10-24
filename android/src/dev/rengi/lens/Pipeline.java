@@ -48,6 +48,7 @@ final class Pipeline {
     private int codec, width, height, fps, bitrate;
     private Range<Integer> fpsRange;
     private boolean configSent;
+    private float bitrateScale = 1f; // thermal guard
 
     Pipeline(CameraManager cameraManager, Handler handler, Sink sink) {
         this.cameraManager = cameraManager;
@@ -79,8 +80,9 @@ final class Pipeline {
         return encoder != null;
     }
 
-    void start(Catalog catalog, Catalog.Cam cam, Settings s) {
+    void start(Catalog catalog, Catalog.Cam cam, Settings s, float bitrateScale) {
         stop();
+        this.bitrateScale = bitrateScale;
         final int gen = ++generation;
         this.cam = cam;
         this.settings = s;
@@ -97,7 +99,7 @@ final class Pipeline {
             while (fps > 15 && !vc.areSizeAndRateSupported(width, height, fps)) fps = fps > 30 ? 30 : fps - 5;
         }
         fpsRange = pickRange(cam, fps);
-        bitrate = s.bitrate > 0 ? s.bitrate : autoBitrate(width, height, fps, codec);
+        bitrate = (int) ((s.bitrate > 0 ? s.bitrate : autoBitrate(width, height, fps, codec)) * bitrateScale);
         if (caps != null) bitrate = caps.getVideoCapabilities().getBitrateRange().clamp(bitrate);
 
         // Some encoders reject the low-latency keys or the size/rate; step down instead of failing.
@@ -110,7 +112,7 @@ final class Pipeline {
             height = smaller.height;
             fps = Math.min(fps, Math.min(30, smaller.maxFps));
             fpsRange = pickRange(cam, fps);
-            bitrate = autoBitrate(width, height, fps, codec);
+            bitrate = (int) (autoBitrate(width, height, fps, codec) * bitrateScale);
             ok = startEncoder(gen, catalog, false);
         }
         if (!ok) {
@@ -316,9 +318,10 @@ final class Pipeline {
         }
     }
 
-    void setBitrate(int bps) {
+    void setBitrate(int bps, float scale) {
         if (encoder == null) return;
-        bitrate = bps > 0 ? bps : autoBitrate(width, height, fps, codec);
+        bitrateScale = scale;
+        bitrate = (int) ((bps > 0 ? bps : autoBitrate(width, height, fps, codec)) * scale);
         Bundle p = new Bundle();
         p.putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, bitrate);
         try {

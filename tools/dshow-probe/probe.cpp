@@ -1,6 +1,6 @@
 // Test-bench app for the Windows virtual camera: does what Zoom/OBS do through DirectShow.
 // Lists video capture devices, opens "rng-lens", pulls a frame through a Sample Grabber and saves it.
-//   dshow-probe.exe [out.bmp] [seconds]
+//   dshow-probe.exe [out.bmp] [seconds] [camera name, default "rng-lens"]
 #include <dshow.h>
 #include <initguid.h>
 #include <qedit.h>
@@ -46,6 +46,7 @@ struct Grab : public ISampleGrabberCB {
 int main(int argc, char** argv) {
     const char* out = argc > 1 ? argv[1] : "probe.bmp";
     int seconds = argc > 2 ? atoi(argv[2]) : 3;
+    std::string camName = argc > 3 ? argv[3] : "rng-lens";
     CoInitialize(nullptr);
 
     ICreateDevEnum* devEnum = nullptr;
@@ -67,7 +68,7 @@ int main(int argc, char** argv) {
                 char name[256];
                 WideCharToMultiByte(CP_UTF8, 0, v.bstrVal, -1, name, sizeof(name), nullptr, nullptr);
                 printf("device: %s\n", name);
-                if (!src && std::string(name) == "rng-lens") m->BindToObject(nullptr, nullptr, IID_IBaseFilter, (void**)&src);
+                if (!src && std::string(name) == camName) m->BindToObject(nullptr, nullptr, IID_IBaseFilter, (void**)&src);
                 VariantClear(&v);
             }
             bag->Release();
@@ -75,7 +76,7 @@ int main(int argc, char** argv) {
         m->Release();
     }
     if (!src) {
-        printf("FAIL rng-lens camera not found\n");
+        printf("FAIL camera %s not found\n", camName.c_str());
         return 1;
     }
 

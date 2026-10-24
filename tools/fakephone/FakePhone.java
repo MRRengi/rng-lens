@@ -28,19 +28,23 @@ public final class FakePhone implements Link.Listener {
     private final Object restartLock = new Object();
     private volatile int generation;
 
+    private volatile int fakeThermal = Integer.parseInt(System.getenv().getOrDefault("FAKE_THERMAL", "0")); // bench: pretend the phone is this hot (0..4)
     private final boolean aac; // which audio codec this fake phone "has": Opus (Android 10+) or AAC
     private volatile Process audioProc;
     private volatile int audioGen;
 
-    FakePhone(boolean aac) {
+    private final String image; // null = test pattern; else a picture as the "camera" (suffix +noise adds grain)
+
+    FakePhone(boolean aac, String image) {
         this.aac = aac;
+        this.image = image;
     }
 
     /** java FakePhone [port] [opus|aac] */
     public static void main(String[] args) throws Exception {
         int port = args.length > 0 ? Integer.parseInt(args[0]) : Protocol.PORT;
         boolean aac = args.length > 1 && args[1].equalsIgnoreCase("aac");
-        new FakePhone(aac).serve(port);
+        new FakePhone(aac, args.length > 2 ? args[2] : null).serve(port);
     }
 
     private void serve(int port) throws IOException {
@@ -105,7 +109,9 @@ public final class FakePhone implements Link.Listener {
                 + ",\"bitrate\":0,\"zoom\":" + zoomPct / 100.0 + ",\"af\":\"auto\",\"focus\":0,\"ae\":\"auto\",\"ev\":0,"
                 + "\"awb\":\"auto\",\"torch\":false,\"stab\":true,\"orient\":0,\"streamWidth\":" + width
                 + ",\"streamHeight\":" + height + ",\"streamFps\":" + fps + ",\"streamBitrate\":4000000,"
-                + "\"battery\":77,\"tempC\":31.5,\"charging\":false,\"dropped\":" + (link == null ? 0 : link.droppedFrames()) + "}";
+                + "\"battery\":77,\"tempC\":" + (31.5 + fakeThermal * 4) + ",\"charging\":true,\"dropped\":" + (link == null ? 0 : link.droppedFrames())
+                + ",\"thermal\":{\"level\":" + fakeThermal + ",\"status\":" + fakeThermal + ",\"throttled\":" + (fakeThermal >= 2)
+                + ",\"limit\":\"" + (fakeThermal >= 2 ? "720p, 24 fps, 40% bitrate" : "full quality") + "\"}}";
     }
 
     private void startStateTicker(final Link l) {
@@ -137,6 +143,8 @@ public final class FakePhone implements Link.Listener {
         if (h != null && h != height) { height = h; restart = true; }
         if (f != null && f != fps) { fps = f; restart = true; }
         if (c != null && c != codec) { codec = c; restart = true; }
+        Integer ft = intField(json, "fakeThermal");
+        if (ft != null) fakeThermal = ft;
         Double z = doubleField(json, "zoom");
         if (z != null) zoomPct = (int) Math.round(z * 100);
         if (restart) startStream();
@@ -278,16 +286,27 @@ public final class FakePhone implements Link.Listener {
             final int gen = generation;
             boolean hevc = codec == Protocol.CODEC_HEVC;
             List<String> cmd = new ArrayList<String>();
-            String[] base = {"ffmpeg", "-hide_banner", "-loglevel", "error", "-re", "-f", "lavfi", "-i",
-                    "testsrc2=size=" + width + "x" + height + ":rate=" + fps, "-pix_fmt", "yuv420p"};
-            for (String s : base) cmd.add(s);
+            if (image == null) {
+                String[] base = {"ffmpeg", "-hide_banner", "-loglevel", "error", "-re", "-f", "lavfi", "-i",
+                        "testsrc2=size=" + width + "x" + height + ":rate=" + fps, "-pix_fmt", "yuv420p"};
+                for (String s : base) cmd.add(s);
+            } else {
+                boolean noise = image.endsWith("+noise");
+                String path = noise ? image.substring(0, image.length() - 6) : image;
+                String vf = "scale=" + width + ":" + height + ":force_original_aspect_ratio=increase,crop=" + width + ":" + height
+                        + (noise ? ",noise=alls=18:allf=t" : "") + ",format=yuv420p";
+                String[] base = {"ffmpeg", "-hide_banner", "-loglevel", "error", "-re", "-loop", "1", "-framerate", "" + fps,
+                        "-i", path, "-vf", vf};
+                for (String s : base) cmd.add(s);
+            }
             if (hevc) {
                 String[] x = {"-c:v", "libx265", "-preset", "ultrafast", "-tune", "zerolatency",
                         "-x265-params", "aud=1:keyint=" + fps * 2 + ":log-level=error", "-b:v", "3M", "-f", "hevc", "-"};
                 for (String s : x) cmd.add(s);
             } else {
                 String[] x = {"-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency", "-profile:v", "high",
-                        "-x264-params", "aud=1:keyint=" + fps * 2, "-b:v", "3M", "-f", "h264", "-"};
+                        "-x264-params", "aud=1:keyint=" + fps * 2, "-b:v", image != null && image.endsWith("+noise") ? "15M" : "3M",
+                        "-f", "h264", "-"};
                 for (String s : x) cmd.add(s);
             }
             try {

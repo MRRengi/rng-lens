@@ -10,7 +10,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
 import android.view.MotionEvent;
-import android.view.OrientationEventListener;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -28,10 +27,9 @@ public final class MainActivity extends Activity implements Engine.Status {
     private static final long AUTO_BLACKOUT_MS = 12_000;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
-    private Engine engine;
+    private boolean started;
     private TextView statusView;
     private View blackout;
-    private OrientationEventListener orientation;
     private boolean streaming;
 
     private final Runnable autoBlackout = new Runnable() {
@@ -47,13 +45,6 @@ public final class MainActivity extends Activity implements Engine.Status {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(buildUi());
-        orientation = new OrientationEventListener(this) {
-            @Override
-            public void onOrientationChanged(int deg) {
-                if (deg == ORIENTATION_UNKNOWN || engine == null) return;
-                engine.setDeviceOrientation(((deg + 45) / 90 * 90) % 360);
-            }
-        };
         boolean cam = checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
         boolean mic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
         if (cam && mic) {
@@ -73,17 +64,25 @@ public final class MainActivity extends Activity implements Engine.Status {
         }
     }
 
+    /** The engine lives in StreamService so streaming survives a locked screen. */
     private void startEngine() {
-        if (engine != null) return;
-        engine = new Engine(this, this);
-        engine.start();
-        if (orientation.canDetectOrientation()) orientation.enable();
+        started = true;
+        StreamService.ui = this;
+        StreamService.activityOpen = true;
+        StreamService.start(this);
+        StreamService.replayStatus();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (started) startEngine(); // after Stop in the notification, coming back restarts it
     }
 
     @Override
     protected void onDestroy() {
-        orientation.disable();
-        if (engine != null) engine.stop();
+        if (StreamService.ui == this) StreamService.ui = null;
+        StreamService.screenClosed();
         super.onDestroy();
     }
 
@@ -145,6 +144,12 @@ public final class MainActivity extends Activity implements Engine.Status {
         statusView.setGravity(Gravity.CENTER);
         statusView.setLineSpacing(dp(4), 1f);
         statusView.setText("Starting...");
+        statusView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (started) startEngine(); // after "Stop" in the notification: tap to start again
+            }
+        });
         col.addView(statusView);
 
         Button dark = new Button(this);
@@ -163,7 +168,14 @@ public final class MainActivity extends Activity implements Engine.Status {
         col.addView(dark);
 
         TextView hint = new TextView(this);
-        hint.setText("Keep this app open while streaming.\nDouble-tap the black screen to come back.");
+        String tip = "You can lock the screen: streaming goes on (screen off = coolest phone).\n"
+                + "Double-tap the black screen to come back.";
+        String maker = android.os.Build.MANUFACTURER.toLowerCase(java.util.Locale.US);
+        if (maker.contains("xiaomi") || maker.contains("redmi") || maker.contains("poco")) {
+            tip += "\n\nMIUI / HyperOS: Settings > Apps > rng-lens > Battery saver > No restrictions,\n"
+                    + "and lock rng-lens in Recents, or the system may stop it.";
+        }
+        hint.setText(tip);
         hint.setTextColor(Color.rgb(110, 110, 120));
         hint.setTextSize(12);
         hint.setGravity(Gravity.CENTER);

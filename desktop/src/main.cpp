@@ -1,5 +1,5 @@
 // rng-lens desktop. Without arguments: the window. With --headless: the test-bench client.
-//   rng-lens [--connect 192.168.1.5]
+//   rng-lens [--connect 192.168.1.5] [--tray]
 //   rng-lens --headless --connect 127.0.0.1[:38440] [--frames 120] [--png out.png] [--control '{"zoom":2}']
 
 #include <cstdlib>
@@ -22,6 +22,7 @@ int main(int argc, char** argv) {
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
         if (a == "--headless") headless = true;
         else if (a == "--discover") return runDiscover(atoi(next().c_str()));
+        else if (a == "--tray") opt.startHidden = true;
         else if (a == "--dump-output") opt.dumpOutput = next();
         else if (a == "--dump-after") opt.dumpAfter = atoi(next().c_str());
         else if (a == "--connect") {

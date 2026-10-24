@@ -9,8 +9,13 @@
 namespace softcam {
 
 
+#ifdef RNGLENS_VCAM_SECOND
+const char NamedMutexName[] = "rng-lens 2/NamedMutex";
+const char SharedMemoryName[] = "rng-lens 2/SharedMemory";
+#else
 const char NamedMutexName[] = "rng-lens/NamedMutex";
 const char SharedMemoryName[] = "rng-lens/SharedMemory";
+#endif
 const uint8_t ProtocolVersion = 2;
 
 

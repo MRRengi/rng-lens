@@ -29,6 +29,27 @@ final class Settings {
     boolean audio = true;
     String mic = "voice"; // voice = noise suppression + echo cancel, raw = untouched
 
+    Settings copy() {
+        Settings c = new Settings();
+        c.camera = camera;
+        c.width = width;
+        c.height = height;
+        c.fps = fps;
+        c.codec = codec;
+        c.bitrate = bitrate;
+        c.zoom = zoom;
+        c.af = af;
+        c.focus = focus;
+        c.ae = ae;
+        c.ev = ev;
+        c.awb = awb;
+        c.torch = torch;
+        c.stab = stab;
+        c.audio = audio;
+        c.mic = mic;
+        return c;
+    }
+
     int apply(JSONObject j) {
         int c = CHANGE_NONE;
         if (j.has("camera")) {

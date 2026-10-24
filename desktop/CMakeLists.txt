@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(rng-lens VERSION 0.2.0 LANGUAGES C CXX)
+project(rng-lens VERSION 1.0.0 LANGUAGES C CXX)
 set(RNGLENS_VERSION "${PROJECT_VERSION}" CACHE STRING "Version shown in the app (CI sets it from the tag)")
 
 set(CMAKE_CXX_STANDARD 17)
@@ -23,6 +23,16 @@ if(WIN32)
   if(MINGW)
     target_compile_options(rnglens_vcam PRIVATE -include ${SOFTCAM}/mingw_compat.h -fpermissive -w)
     target_link_options(rnglens_vcam PRIVATE -static -static-libgcc -static-libstdc++ -s)
+  endif()
+  # The optional second phone's camera, "rng-lens 2": same code, own CLSID and shared memory.
+  add_library(rnglens_vcam2 SHARED ${SOFTCAM_SRC} ${SOFTCAM}/softcam/softcam.cpp ${SOFTCAM}/softcam/softcam.def)
+  target_include_directories(rnglens_vcam2 PRIVATE ${SOFTCAM} ${SOFTCAM}/baseclasses)
+  target_compile_definitions(rnglens_vcam2 PRIVATE UNICODE _UNICODE NDEBUG RNGLENS_VCAM_SECOND)
+  target_link_libraries(rnglens_vcam2 PRIVATE strmiids ole32 oleaut32 uuid winmm user32 gdi32 advapi32)
+  set_target_properties(rnglens_vcam2 PROPERTIES PREFIX "")
+  if(MINGW)
+    target_compile_options(rnglens_vcam2 PRIVATE -include ${SOFTCAM}/mingw_compat.h -fpermissive -w)
+    target_link_options(rnglens_vcam2 PRIVATE -static -static-libgcc -static-libstdc++ -s)
   endif()
 endif()
 if(RNGLENS_VCAM_ONLY)
@@ -69,7 +79,7 @@ endif()
 set(IMGUI ${TP}/imgui)
 add_executable(rng-lens
   src/main.cpp src/app.cpp src/headless.cpp src/connection.cpp src/decoder.cpp src/discovery.cpp
-  src/platform.cpp src/prefs.cpp src/renderer.cpp src/audio.cpp src/miniaudio_impl.c src/vcam_windows.cpp src/vcam_linux.cpp
+  src/platform.cpp src/prefs.cpp src/renderer.cpp src/audio.cpp src/miniaudio_impl.c src/vision.cpp src/shell.cpp src/stb_impl.cpp src/vcam_windows.cpp src/vcam_linux.cpp
   ${TP}/glad/src/gl.c
   ${IMGUI}/imgui.cpp ${IMGUI}/imgui_draw.cpp ${IMGUI}/imgui_tables.cpp ${IMGUI}/imgui_widgets.cpp
   ${IMGUI}/backends/imgui_impl_glfw.cpp ${IMGUI}/backends/imgui_impl_opengl3.cpp)
@@ -78,7 +88,7 @@ target_compile_definitions(rng-lens PRIVATE RNGLENS_VERSION="${RNGLENS_VERSION}"
 target_link_libraries(rng-lens PRIVATE ${FFMPEG_TARGET} ${GLFW_TARGET})
 if(WIN32)
   target_sources(rng-lens PRIVATE res/rng-lens.rc)
-  target_link_libraries(rng-lens PRIVATE ws2_32 shell32 ole32)
+  target_link_libraries(rng-lens PRIVATE ws2_32 shell32 ole32 comdlg32)
   if(MINGW)
     target_link_options(rng-lens PRIVATE -mwindows -static -static-libgcc -static-libstdc++ -s)
   endif()

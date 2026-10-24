@@ -37,7 +37,7 @@ VIAddVersionKey "LegalCopyright" "MIT"
 !define MUI_ICON "${SRC}\rng-lens.ico"
 !define MUI_UNICON "${SRC}\rng-lens.ico"
 !define MUI_ABORTWARNING
-!define MUI_WELCOMEPAGE_TEXT "Turns your phone into a webcam (and microphone) for any app on this PC.$\r$\n$\r$\nThis adds the camera $\"rng-lens$\" that Zoom, Discord, OBS, Teams and browsers can pick.$\r$\n$\r$\nOn the phone: install rng-lens.apk from the same release page."
+!define MUI_WELCOMEPAGE_TEXT "Turns your phone into a webcam (and microphone) for any app on this PC: background blur, auto-frame, looks and night mode included.$\r$\n$\r$\nThis adds the camera $\"rng-lens$\" that Zoom, Discord, OBS, Teams and browsers can pick.$\r$\n$\r$\nOn the phone: install rng-lens.apk from the same release page."
 !define MUI_FINISHPAGE_RUN "$INSTDIR\rng-lens.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "Start rng-lens"
 !define MUI_FINISHPAGE_LINK "Get the phone app and updates"
@@ -57,14 +57,29 @@ VIAddVersionKey "LegalCopyright" "MIT"
   Pop $0
 !macroend
 
-!macro Unregister
-  ${If} ${FileExists} "$INSTDIR\rnglens_vcam.dll"
+!macro UnregisterOne DLL
+  ${If} ${FileExists} "$INSTDIR\${DLL}"
     ${DisableX64FSRedirection}
-    ExecWait '"$WINDIR\System32\regsvr32.exe" /u /s "$INSTDIR\rnglens_vcam.dll"'
+    ExecWait '"$WINDIR\System32\regsvr32.exe" /u /s "$INSTDIR\${DLL}"'
     ${EnableX64FSRedirection}
   ${EndIf}
-  ${If} ${FileExists} "$INSTDIR\x86\rnglens_vcam.dll"
-    ExecWait '"$WINDIR\SysWOW64\regsvr32.exe" /u /s "$INSTDIR\x86\rnglens_vcam.dll"'
+  ${If} ${FileExists} "$INSTDIR\x86\${DLL}"
+    ExecWait '"$WINDIR\SysWOW64\regsvr32.exe" /u /s "$INSTDIR\x86\${DLL}"'
+  ${EndIf}
+!macroend
+
+!macro Unregister
+  !insertmacro UnregisterOne "rnglens_vcam.dll"
+  !insertmacro UnregisterOne "rnglens_vcam2.dll"
+!macroend
+
+!macro RegisterOne DLL
+  ${DisableX64FSRedirection}
+  ExecWait '"$WINDIR\System32\regsvr32.exe" /s "$INSTDIR\${DLL}"' $0
+  ${EnableX64FSRedirection}
+  ExecWait '"$WINDIR\SysWOW64\regsvr32.exe" /s "$INSTDIR\x86\${DLL}"' $1
+  ${If} $0 != 0
+    DetailPrint "Warning: ${DLL} (64-bit) did not register (code $0)"
   ${EndIf}
 !macroend
 
@@ -89,6 +104,8 @@ Section "rng-lens" SecMain
 
   File "${SRC}\rng-lens.exe"
   File "${SRC}\rnglens_vcam.dll"
+  File "${SRC}\rnglens_vcam2.dll"
+  File "${SRC}\onnxruntime.dll"
   File "${SRC}\avcodec-*.dll"
   File "${SRC}\avutil-*.dll"
   File "${SRC}\swscale-*.dll"
@@ -98,6 +115,10 @@ Section "rng-lens" SecMain
   File "${SRC}\LICENSE*.txt"
   SetOutPath "$INSTDIR\x86"
   File "${SRC}\x86\rnglens_vcam.dll"
+  File "${SRC}\x86\rnglens_vcam2.dll"
+  SetOutPath "$INSTDIR\models"
+  File "${SRC}\models\*.onnx"
+  File "${SRC}\models\LICENSES.txt"
 !ifdef ADB_DIR
   SetOutPath "$INSTDIR\adb"
   File "${ADB_DIR}\adb.exe"
@@ -107,14 +128,9 @@ Section "rng-lens" SecMain
 !endif
   SetOutPath "$INSTDIR"
 
-  ; The camera, for 64-bit and 32-bit apps.
-  ${DisableX64FSRedirection}
-  ExecWait '"$WINDIR\System32\regsvr32.exe" /s "$INSTDIR\rnglens_vcam.dll"' $0
-  ${EnableX64FSRedirection}
-  ExecWait '"$WINDIR\SysWOW64\regsvr32.exe" /s "$INSTDIR\x86\rnglens_vcam.dll"' $1
-  ${If} $0 != 0
-    DetailPrint "Warning: the 64-bit camera did not register (code $0)"
-  ${EndIf}
+  ; The cameras ("rng-lens" and, for the optional second phone, "rng-lens 2"), for 64-bit and 32-bit apps.
+  !insertmacro RegisterOne "rnglens_vcam.dll"
+  !insertmacro RegisterOne "rnglens_vcam2.dll"
 
   ; Let phones find this PC on Wi-Fi without a firewall prompt (only for rng-lens.exe).
   nsExec::Exec 'netsh advfirewall firewall delete rule name="rng-lens"'
@@ -138,7 +154,7 @@ Section "rng-lens" SecMain
   WriteRegStr HKLM "${UNINST_KEY}" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1
-  WriteRegDWORD HKLM "${UNINST_KEY}" "EstimatedSize" 12000
+  WriteRegDWORD HKLM "${UNINST_KEY}" "EstimatedSize" 34000
 SectionEnd
 
 Section "Uninstall"
@@ -151,6 +167,7 @@ Section "Uninstall"
   RMDir /r "$SMPROGRAMS\rng-lens"
   RMDir /r "$INSTDIR\adb"
   RMDir /r "$INSTDIR\x86"
+  RMDir /r "$INSTDIR\models"
   Delete "$INSTDIR\*.dll"
   Delete "$INSTDIR\*.txt"
   Delete "$INSTDIR\rng-lens.exe"
@@ -158,4 +175,5 @@ Section "Uninstall"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
   DeleteRegKey HKLM "${UNINST_KEY}"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "rng-lens"
 SectionEnd

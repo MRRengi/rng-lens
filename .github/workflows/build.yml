@@ -53,6 +53,15 @@ jobs:
         if: steps.ffcache.outputs.cache-hit != 'true'
         run: tools/build-ffmpeg-windows.sh
 
+      - name: Cache vision runtime and models
+        uses: actions/cache@v4
+        with:
+          path: third_party/vision
+          key: vision-${{ hashFiles('tools/fetch-vision.sh') }}
+
+      - name: Vision runtime and models
+        run: tools/fetch-vision.sh
+
       - name: Android app
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}

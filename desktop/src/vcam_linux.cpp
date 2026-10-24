@@ -7,6 +7,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -21,6 +22,7 @@ namespace {
 
 class LoopbackCamera : public VirtualCamera {
 public:
+    explicit LoopbackCamera(int index) : index_(index & 1) {}
     ~LoopbackCamera() override {
         stop();
         if (sws_) sws_freeContext(sws_);
@@ -83,10 +85,11 @@ public:
     }
 
 private:
-    static std::string findDevice() {
+    // Camera 1 takes the device labelled "rng-lens" (or the first loopback), camera 2 "rng-lens 2" (or the second).
+    std::string findDevice() const {
         DIR* d = opendir("/sys/class/video4linux");
         if (!d) return {};
-        std::string found;
+        std::vector<std::pair<std::string, std::string>> devs; // (name, path)
         while (dirent* e = readdir(d)) {
             if (strncmp(e->d_name, "video", 5) != 0) continue;
             std::string base = std::string("/sys/class/video4linux/") + e->d_name;
@@ -97,16 +100,20 @@ private:
             (void)n;
             fclose(f);
             std::string s(name);
+            while (!s.empty() && (s.back() == '\n' || s.back() == ' ')) s.pop_back();
             if (s.find("rng-lens") != std::string::npos || s.find("Dummy") != std::string::npos ||
-                s.find("loopback") != std::string::npos) {
-                found = std::string("/dev/") + e->d_name;
-                break;
-            }
+                s.find("loopback") != std::string::npos)
+                devs.push_back({s, std::string("/dev/") + e->d_name});
         }
         closedir(d);
-        return found;
+        std::sort(devs.begin(), devs.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
+        const char* want = index_ ? "rng-lens 2" : "rng-lens";
+        for (const auto& dv : devs)
+            if (dv.first == want) return dv.second;
+        return (size_t)index_ < devs.size() ? devs[index_].second : std::string();
     }
 
+    int index_ = 0;
     int fd_ = -1;
     int w_ = 0, h_ = 0;
     std::vector<uint8_t> buf_;
@@ -115,5 +122,5 @@ private:
 
 }  // namespace
 
-std::unique_ptr<VirtualCamera> VirtualCamera::create() { return std::make_unique<LoopbackCamera>(); }
+std::unique_ptr<VirtualCamera> VirtualCamera::create(int index) { return std::make_unique<LoopbackCamera>(index); }
 #endif

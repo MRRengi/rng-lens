@@ -1,6 +1,6 @@
 rng-lens - your phone as a webcam. Free, open source, no watermark.
 
-1. Phone: install rng-lens.apk and open it (allow camera access).
+1. Phone: install rng-lens.apk and open it (allow camera and microphone).
 2. PC: install rng-lens-setup.exe - it adds the "rng-lens" camera.
 3. PC: run rng-lens.exe. Your phone shows up on the right if both are on the same Wi-Fi - click it.
 4. In Zoom / Discord / OBS / Meet pick the camera called "rng-lens".
@@ -12,9 +12,14 @@ Sound: the phone's microphone plays on the output you pick under "Sound". To use
 in Zoom/Discord, install the free VB-Cable (vb-audio.com/Cable) and pick "CABLE Input" there, then
 choose "CABLE Output" as the microphone in your app.
 
+Effects: background blur / picture, auto-frame, looks, night mode etc. are under "Effects" in the window.
+Background and auto-frame need the Microsoft Visual C++ Runtime (x64), which most PCs already have:
+https://aka.ms/vs/17/release/vc_redist.x64.exe
+
 Tips
-- Keep the rng-lens app open on the phone. It blacks its screen out after a few seconds to save battery;
-  double-tap to wake it.
+- Lock the phone's screen while streaming: the stream goes on and the phone stays coolest.
+- Closing the window keeps the camera running in the tray; quit from the tray icon.
+- Hotkeys: Ctrl+Alt+M mute mic, Ctrl+Alt+R mirror, Ctrl+Alt+T torch, Ctrl+Alt+B background, Ctrl+Alt+F auto-frame.
 - Everything (lens, resolution up to 4K, 60 fps, zoom, focus, exposure, torch, HEVC) is set from the PC window.
 - Shortcut that connects straight away:  rng-lens.exe --connect 192.168.1.23
 - Remove: Settings > Apps > rng-lens > Uninstall

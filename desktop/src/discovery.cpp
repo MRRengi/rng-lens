@@ -63,7 +63,7 @@ void Discovery::run() {
         std::lock_guard<std::mutex> lock(m_);
         bool found = false;
         for (Phone& q : phones_) {
-            if (q.ip == p.ip) {
+            if (q.ip == p.ip && q.port == p.port) {
                 q = p;
                 found = true;
             }

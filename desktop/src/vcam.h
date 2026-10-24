@@ -9,7 +9,8 @@
 
 class VirtualCamera {
 public:
-    static std::unique_ptr<VirtualCamera> create();
+    // index 0 = "rng-lens", 1 = "rng-lens 2" (the optional second phone).
+    static std::unique_ptr<VirtualCamera> create(int index = 0);
     virtual ~VirtualCamera() = default;
 
     // False with a human-readable reason when the driver is not installed.

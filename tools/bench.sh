@@ -12,6 +12,11 @@ rm -rf "$OUT" && mkdir -p "$OUT/classes"
 javac -nowarn -d "$OUT/classes" "$ROOT/android/src/dev/rengi/lens/Protocol.java" \
   "$ROOT/android/src/dev/rengi/lens/Link.java" "$ROOT/tools/fakephone/FakePhone.java" 2>&1 | grep -v JAVA_TOOL_OPTIONS
 
+pass=0; fail=0
+javac -nowarn -d "$OUT/classes" "$ROOT/android/src/dev/rengi/lens/ThermalPolicy.java" "$ROOT/tools/thermal-test/ThermalTest.java" 2>&1 | grep -v JAVA_TOOL_OPTIONS
+if java -cp "$OUT/classes" ThermalTest > "$OUT/thermal.txt" 2>&1; then echo "PASS thermal-policy"; pass=$((pass+1)); else echo "FAIL thermal-policy"; fail=$((fail+1)); fi
+grep -v JAVA_TOOL "$OUT/thermal.txt" | grep FAIL
+
 java -cp "$OUT/classes" FakePhone $PORT opus > "$OUT/fakephone.log" 2>&1 &
 PHONE=$!
 java -cp "$OUT/classes" FakePhone $((PORT+1)) aac > "$OUT/fakephone-aac.log" 2>&1 &
@@ -19,7 +24,6 @@ PHONE2=$!
 trap 'kill $PHONE $PHONE2 2>/dev/null' EXIT
 sleep 1.5
 
-pass=0; fail=0
 check() { # name, expected WxH, args...
   local name=$1 size=$2; shift 2
   if "$BIN" --headless --connect 127.0.0.1:$PORT --png "$OUT/$name.png" "$@" > "$OUT/$name.json" 2> "$OUT/$name.err"; then
