@@ -3,6 +3,7 @@
 // happens (input, a decoded frame, a phone state change), so an idle rng-lens costs nothing.
 
 #include "app.h"
+#include "autoframe.h"
 
 #include <algorithm>
 #include <atomic>
@@ -265,44 +266,22 @@ struct Session {
         return vision.ready();
     }
 
-    // Auto-frame: ease the crop towards a head-and-shoulders frame around the main face.
+    // Auto-frame: follow the main face with a filtered, dead-zoned, spring-driven crop (autoframe.h).
     bool updateCrop(float dt, int ww, int wh) {
-        CropRect target;
         const FilterPrefs& f = sp.filters;
+        FaceBox fb;
+        bool valid = false;
         if (f.autoFrame && vision.ready() && ww > 0 && wh > 0) {
-            FaceBox fb = vision.face();
+            fb = vision.face();
             int64_t now = nowMs();
             if (fb.score > 0 && now - fb.atMs < 1500) lastFaceSeen = now;
-            if (fb.score > 0 && now - lastFaceSeen < 2500) {
-                float aspect = (float)sp.outWidth / sp.outHeight;
-                float k = 4.6f - 2.4f * f.frameTightness; // crop height in face heights
-                float ch = std::min(1.f, std::max(0.35f, fb.h * k));
-                float cw = ch * wh * aspect / ww;
-                if (cw > 1.f) {
-                    ch /= cw;
-                    cw = 1.f;
-                }
-                float cx = fb.x + fb.w / 2, cy = fb.y + fb.h / 2 + ch * 0.12f; // eyes in the upper third
-                target.x0 = std::min(1.f - cw, std::max(0.f, cx - cw / 2));
-                target.y0 = std::min(1.f - ch, std::max(0.f, cy - ch / 2));
-                target.x1 = target.x0 + cw;
-                target.y1 = target.y0 + ch;
-            }
+            valid = fb.score > 0 && now - lastFaceSeen < 2500;
         }
-        float cw = crop.x1 - crop.x0, tw = target.x1 - target.x0;
-        float dx = (target.x0 + target.x1 - crop.x0 - crop.x1) / 2, dy = (target.y0 + target.y1 - crop.y0 - crop.y1) / 2;
-        // Dead zone: small head movements don't move the camera; real moves do, smoothly.
-        bool farAway = std::fabs(dx) > cw * 0.06f || std::fabs(dy) > cw * 0.06f || std::fabs(tw - cw) > cw * 0.08f;
-        if (!farAway && !moving) return false;
-        moving = std::fabs(dx) > 0.002f || std::fabs(dy) > 0.002f || std::fabs(tw - cw) > 0.002f;
-        float rate = 1.f - std::exp(-dt * (0.8f + 4.f * sp.filters.frameSpeed));
-        crop.x0 += (target.x0 - crop.x0) * rate;
-        crop.y0 += (target.y0 - crop.y0) * rate;
-        crop.x1 += (target.x1 - crop.x1) * rate;
-        crop.y1 += (target.y1 - crop.y1) * rate;
-        return true;
+        if (ww <= 0 || wh <= 0) return false;
+        return autoFrame.update(dt, fb, valid, ww, wh, (float)sp.outWidth / sp.outHeight, f.frameTightness,
+                                f.frameSpeed, crop);
     }
-    bool moving = false;
+    AutoFrame autoFrame;
     int64_t lastTick = 0;
 
     // One loop step. Returns the BGR frame for the vcam via the readback inside.

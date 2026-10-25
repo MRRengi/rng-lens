@@ -293,7 +293,11 @@ final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
                 if ((change & Settings.CHANGE_RESTART) != 0) {
                     startPipeline();
                 } else {
-                    if ((change & Settings.CHANGE_REQUEST) != 0) pipeline.updateRequest(true);
+                    if ((change & Settings.CHANGE_REQUEST) != 0) {
+                        // The camera runs on a thermal-limited copy of the settings: hand it the new controls.
+                        if (running_ != null) running_.copyRequestFrom(settings);
+                        pipeline.updateRequest(true);
+                    }
                     if ((change & Settings.CHANGE_BITRATE) != 0)
                         pipeline.setBitrate(settings.bitrate, thermal.limits().bitrateScale);
                     if ((change & Settings.CHANGE_KEYFRAME) != 0) pipeline.requestKeyframe();

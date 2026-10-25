@@ -29,6 +29,18 @@ final class Settings {
     boolean audio = true;
     String mic = "voice"; // voice = noise suppression + echo cancel, raw = untouched
 
+    /** Takes the live camera controls (zoom, focus, exposure, white balance, torch, stabilization) from o. */
+    void copyRequestFrom(Settings o) {
+        zoom = o.zoom;
+        af = o.af;
+        focus = o.focus;
+        ae = o.ae;
+        ev = o.ev;
+        awb = o.awb;
+        torch = o.torch;
+        stab = o.stab;
+    }
+
     Settings copy() {
         Settings c = new Settings();
         c.camera = camera;
