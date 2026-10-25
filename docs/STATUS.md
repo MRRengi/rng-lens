@@ -16,10 +16,14 @@ DONE
   two phones, both cameras deliver), sound-bench (real playback), installer install/uninstall under Wine,
   effects from the installed copy under Wine
 
+- v1.0.0 released on GitHub (CI with signing secrets)
+- v1.0.1: zoom / focus / exposure / torch from the PC work again (broke in 1.0); auto-frame follows
+  smoothly (filtered detections, dead zone, spring) instead of twitching. Released
+
 *WE ARE HERE*
-- Maks: install 1.0 (APK + setup.exe) and test on the Poco F3: effects, locked screen, a long session for heat
-- Release v1.0.0 via the release branch (needs the 3 signing secrets in GitHub)
+- Maks: install 1.0.1, check zoom and auto-frame; a long session for heat; Reddit r/SideProject + X posts
 
 AHEAD
 - Fix what the real phone / real GPU show
+- Google Play (targetSdk 36, camera+mic service types, AAB, privacy page), F-Droid; support button on PC
 - Windows 11 Media Foundation camera (Windows Camera app), iOS app
