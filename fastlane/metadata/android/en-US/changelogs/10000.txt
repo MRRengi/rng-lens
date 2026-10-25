@@ -1,0 +1,4 @@
+- Heat guard: steps quality down before the phone overheats
+- Keeps streaming with the screen locked
+- PC: background blur and replace, auto-frame, looks, skin smoothing, night mode
+- Battery and temperature on the PC, tray, hotkeys, optional second phone

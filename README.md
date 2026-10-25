@@ -1,8 +1,26 @@
-# rng-lens
+# rng-lens - use your Android phone as a webcam (free Iriun / DroidCam alternative)
 
-Your phone as a webcam and microphone. Free, open source, no watermark, no account. Every "pro" feature included.
+Your phone as a webcam and microphone for Windows. Free, open source, no ads, no watermark, no account,
+no pro version: every feature is included.
 
-**Download:** [Releases](https://github.com/MRRengi/rng-lens/releases) - `rng-lens-setup-x.y.z.exe` for Windows, `rng-lens-x.y.z.apk` for the phone.
+**Download:** [Windows installer](https://github.com/MRRengi/rng-lens/releases/latest/download/rng-lens-setup.exe) ·
+[phone app (APK)](https://github.com/MRRengi/rng-lens/releases/latest/download/rng-lens.apk) ·
+[all releases](https://github.com/MRRengi/rng-lens/releases) · [website](https://mrrengi.github.io/rng-lens/)
+
+![rng-lens on the PC](docs/img/rng-lens-pc.png)
+
+## How it compares
+
+| | rng-lens | Typical free phone-webcam apps |
+|---|---|---|
+| Resolution | up to 4K / 60 fps | capped in the free version |
+| Watermark, ads | none | often |
+| Background blur, auto-frame | yes, on the PC's GPU | paid or missing |
+| Overheating on long calls | heat guard steps quality down before it happens | camera drops when the phone gets hot |
+| Streaming with the screen locked | yes | rarely |
+| Source code | MIT | closed |
+
+## Features
 
 - Any app sees a camera called **rng-lens**: Zoom, Discord, OBS, Teams, Meet in Chrome
 - Wi-Fi with auto-discovery, or USB through adb
@@ -40,6 +58,8 @@ behind, the phone drops frames until the next key frame instead of buffering.
 | `third_party/softcam/` | Windows virtual camera: [Softcam](https://github.com/tshino/softcam) rebranded (own CLSID, name "rng-lens"), builds with mingw |
 | `tools/` | Test benches, FFmpeg build script, icon generator |
 | `packaging/windows/` | NSIS installer and the user README |
+| `site/` | Project website (GitHub Pages) and privacy policy |
+| `fastlane/` | Store listing texts (F-Droid, IzzyOnDroid) |
 | `.github/workflows/` | CI: builds and benches every push; a `v*` tag publishes a Release |
 | `docs/SPEC.md` | Architecture and the wire protocol |
 

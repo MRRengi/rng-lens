@@ -115,5 +115,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           V="${{ steps.ver.outputs.version }}"
-          gh release create "v$V" "dist/rng-lens-setup-$V.exe" "dist/rng-lens-$V.apk" --target "$GITHUB_SHA" \
-            --title "rng-lens $V" --notes-file packaging/release-notes.md
+          # Version-less copies so .../releases/latest/download/rng-lens.apk always points at the newest build.
+          cp "dist/rng-lens-setup-$V.exe" dist/rng-lens-setup.exe
+          cp "dist/rng-lens-$V.apk" dist/rng-lens.apk
+          gh release create "v$V" "dist/rng-lens-setup-$V.exe" "dist/rng-lens-$V.apk" dist/rng-lens-setup.exe dist/rng-lens.apk \
+            --target "$GITHUB_SHA" --title "rng-lens $V" --notes-file packaging/release-notes.md

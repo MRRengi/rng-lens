@@ -1,0 +1,2 @@
+- Zoom, focus, exposure, white balance and torch from the PC work again
+- Auto-frame follows your face smoothly instead of twitching

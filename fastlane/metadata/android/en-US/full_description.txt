@@ -1,0 +1,21 @@
+rng-lens turns your Android phone into a webcam and microphone for your Windows PC. It is free and open source: no ads, no account, no watermark and no pro version. Every feature is included.
+
+<b>What you get</b>
+<ul>
+<li>A normal camera called "rng-lens" in Zoom, Discord, OBS, Teams, Meet and any other app</li>
+<li>Wi-Fi with automatic discovery, or USB</li>
+<li>Up to 4K and 60 fps, H.264 or HEVC</li>
+<li>Every lens the phone exposes, zoom, manual focus, exposure and white-balance locks, torch, stabilization</li>
+<li>Heat guard: the phone watches Android's thermal forecast and lowers fps or resolution before it overheats, then goes back up when it cools. Battery and temperature are shown on the PC</li>
+<li>Keeps streaming with the screen locked</li>
+<li>Phone microphone with noise suppression, or raw</li>
+<li>On the PC: background blur or replace, auto-frame that follows your face, colour looks, sharpen, skin smoothing and night mode, all on the PC's graphics card</li>
+</ul>
+
+<b>Light on the phone</b>
+The app is about 70 KB. The camera writes straight into the phone's hardware video encoder and the encoded stream goes to the PC, so the phone does almost no work and stays cool.
+
+<b>You also need the PC app</b>
+Download the free Windows installer from https://github.com/MRRengi/rng-lens/releases
+
+rng-lens collects no data. The stream goes only from your phone to your own computer.

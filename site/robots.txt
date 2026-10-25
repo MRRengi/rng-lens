@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://mrrengi.github.io/rng-lens/sitemap.xml

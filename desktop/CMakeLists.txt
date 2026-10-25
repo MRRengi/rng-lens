@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
-project(rng-lens VERSION 1.0.1 LANGUAGES C CXX)
-set(RNGLENS_VERSION "${PROJECT_VERSION}" CACHE STRING "Version shown in the app (CI sets it from the tag)")
+project(rng-lens VERSION 1.0.2 LANGUAGES C CXX)
+set(RNGLENS_VERSION "" CACHE STRING "Version shown in the app (empty = the project version)")
+if(NOT RNGLENS_VERSION)
+    set(RNGLENS_VERSION "${PROJECT_VERSION}")
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

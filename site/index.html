@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rng-lens - Use Your Android Phone as a Webcam | Free Iriun &amp; DroidCam Alternative</title>
+<meta name="description" content="rng-lens turns your Android phone into a webcam and microphone for Windows. Free and open source: up to 4K/60, background blur, auto-frame, heat guard. No ads, no watermark, no pro version.">
+<link rel="canonical" href="https://mrrengi.github.io/rng-lens/">
+<link rel="icon" href="favicon.ico">
+<meta property="og:type" content="website">
+<meta property="og:title" content="rng-lens - your Android phone as a free webcam">
+<meta property="og:description" content="Free, open source phone webcam for Windows. 4K, background blur, auto-frame, heat guard. No ads, no pro version.">
+<meta property="og:image" content="https://mrrengi.github.io/rng-lens/img/rng-lens-pc.png">
+<meta property="og:url" content="https://mrrengi.github.io/rng-lens/">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"rng-lens",
+"applicationCategory":"MultimediaApplication","operatingSystem":"Windows 10, Windows 11, Android 6+",
+"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},
+"description":"Use your Android phone as a webcam and microphone on Windows. Free and open source.",
+"url":"https://mrrengi.github.io/rng-lens/","downloadUrl":"https://github.com/MRRengi/rng-lens/releases/latest",
+"license":"https://opensource.org/licenses/MIT","author":{"@type":"Person","name":"Maksym Zhuk","url":"https://rengi.dev"}}
+</script>
+<style>
+:root{--bg:#121216;--panel:#1b1b21;--line:#2a2a33;--text:#ecebe8;--muted:#9a99a3;--accent:#ff5a36;--ok:#3ddc84}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:inherit}
+.wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+header{padding:22px 0;display:flex;justify-content:space-between;align-items:center}
+.logo{font-weight:700;font-size:20px;color:var(--accent);text-decoration:none;letter-spacing:-.01em}
+nav a{color:var(--muted);text-decoration:none;margin-left:22px;font-size:15px}
+nav a:hover{color:var(--text)}
+.hero{padding:56px 0 36px}
+h1{font-size:clamp(32px,5.4vw,56px);line-height:1.08;letter-spacing:-.025em;max-width:16ch}
+h1 em{font-style:normal;color:var(--accent)}
+.lead{color:var(--muted);font-size:19px;max-width:56ch;margin-top:18px}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:13px 20px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;border:1px solid var(--line);background:var(--panel)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn:hover{transform:translateY(-1px)}
+.btn small{font-weight:400;opacity:.75}
+.note{color:var(--muted);font-size:13px;margin-top:12px}
+.shot{margin:44px 0 0;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+.shot img{display:block;width:100%;height:auto}
+section{padding:64px 0 0}
+h2{font-size:28px;letter-spacing:-.015em;margin-bottom:22px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
+.card h3{font-size:16px;margin-bottom:6px}
+.card p{color:var(--muted);font-size:14.5px}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:500}
+td:nth-child(2){color:var(--ok)}
+.table{overflow-x:auto}
+ol{padding-left:22px;color:var(--muted)}
+ol li{margin:8px 0}
+ol b{color:var(--text)}
+footer{padding:70px 0 40px;color:var(--muted);font-size:14px;display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between}
+footer a{color:var(--muted)}
+@media (max-width:560px){nav a:not(:last-child){display:none}.hero{padding-top:30px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <a class="logo" href="./">rng-lens</a>
+  <nav><a href="#features">Features</a><a href="#setup">Setup</a><a href="https://github.com/MRRengi/rng-lens">GitHub</a></nav>
+</header>
+
+<div class="hero">
+  <h1>Your Android phone as a <em>free webcam</em>.</h1>
+  <p class="lead">rng-lens turns your phone into a webcam and microphone for Windows. Up to 4K, background blur,
+    auto-frame and a heat guard that keeps long calls from overheating the phone. Open source, no ads,
+    no watermark, no pro version.</p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/MRRengi/rng-lens/releases/latest/download/rng-lens-setup.exe">Download for Windows <small>10 / 11, 64-bit</small></a>
+    <a class="btn" href="https://github.com/MRRengi/rng-lens/releases/latest/download/rng-lens.apk">Phone app (APK) <small>Android 6+</small></a>
+  </div>
+  <p class="note">The Windows installer is not code-signed yet: if Windows warns about an unknown publisher, click More info &gt; Run anyway.
+    Every release is built in public by GitHub Actions from the source.</p>
+  <div class="shot"><img src="img/rng-lens-pc.png" width="1100" height="650" alt="rng-lens PC app showing the phone camera, battery, temperature and camera controls"></div>
+</div>
+
+<section id="features">
+  <h2>Everything included, nothing locked</h2>
+  <div class="grid">
+    <div class="card"><h3>Works in every app</h3><p>Shows up as a normal camera called "rng-lens" in Zoom, Discord, OBS, Teams, Meet and anything else that uses a webcam.</p></div>
+    <div class="card"><h3>Up to 4K / 60 fps</h3><p>H.264 or HEVC, every lens the phone exposes, zoom, manual focus, exposure and white-balance locks, torch, stabilization.</p></div>
+    <div class="card"><h3>Heat guard</h3><p>The phone watches Android's own thermal forecast and lowers fps or resolution before it overheats, then goes back up when it cools.</p></div>
+    <div class="card"><h3>Lock the screen, keep streaming</h3><p>Turn the phone's screen off and the camera keeps going. That's the coolest way to run it on a stand.</p></div>
+    <div class="card"><h3>Background blur and auto-frame</h3><p>Blur or replace the background, and let the frame follow your face. All effects run on the PC's graphics card, not the phone.</p></div>
+    <div class="card"><h3>Looks and night mode</h3><p>Colour looks, brightness, contrast, warmth, sharpen, skin smoothing and a motion-aware night mode for dark rooms.</p></div>
+    <div class="card"><h3>Phone microphone</h3><p>Stream the phone's mic with noise suppression or raw. Pair it with the free VB-Cable to use it as a mic in calls.</p></div>
+    <div class="card"><h3>Light on the phone</h3><p>The phone app is about 70 KB. The camera feeds the hardware encoder directly, so the phone does almost no work.</p></div>
+    <div class="card"><h3>Wi-Fi or USB</h3><p>Same Wi-Fi and the phone shows up by itself. USB works too. Tray icon, start with Windows, hotkeys, an optional second phone.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>How it compares</h2>
+  <div class="table"><table>
+    <tr><th></th><th>rng-lens</th><th>Typical free phone-webcam apps</th></tr>
+    <tr><td>Resolution</td><td>Up to 4K / 60 fps</td><td>Capped in the free version</td></tr>
+    <tr><td>Watermark and ads</td><td>None</td><td>Often</td></tr>
+    <tr><td>Background blur, auto-frame</td><td>Included</td><td>Paid or missing</td></tr>
+    <tr><td>Long calls</td><td>Heat guard steps down before overheating</td><td>Camera can drop when the phone gets hot</td></tr>
+    <tr><td>Screen locked</td><td>Keeps streaming</td><td>Rarely supported</td></tr>
+    <tr><td>Source code</td><td>Open source (MIT)</td><td>Closed</td></tr>
+  </table></div>
+</section>
+
+<section id="setup">
+  <h2>Set up in two minutes</h2>
+  <ol>
+    <li><b>Phone:</b> install the APK and allow camera and microphone.</li>
+    <li><b>PC:</b> run the Windows installer. It adds the camera "rng-lens".</li>
+    <li><b>Connect:</b> start rng-lens on the PC with the phone on the same Wi-Fi. It connects by itself (or plug in USB with USB debugging on).</li>
+    <li><b>Use it:</b> pick "rng-lens" as the camera in your call or streaming app.</li>
+  </ol>
+</section>
+
+<footer>
+  <span>rng-lens is free software (MIT) by <a href="https://rengi.dev">Rengi Dev</a>.</span>
+  <span><a href="https://github.com/MRRengi/rng-lens">Source</a> · <a href="https://github.com/MRRengi/rng-lens/issues">Report a problem</a> · <a href="privacy.html">Privacy</a></span>
+</footer>
+</div>
+</body>
+</html>
