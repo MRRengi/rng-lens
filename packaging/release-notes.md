@@ -1,8 +1,8 @@
 Your phone as a webcam and microphone. Free, open source, no watermark, no account.
 
 **Install**
-1. Phone (Android 6+): download `rng-lens-x.y.z.apk` below, open it, allow camera and microphone.
-2. PC (Windows 10/11, 64-bit): run `rng-lens-setup-x.y.z.exe`. It adds the camera **rng-lens**.
+1. Phone (Android 6+): download `rng-lens.apk` below, open it, allow camera and microphone.
+2. PC (Windows 10/11, 64-bit): run `rng-lens-setup.exe`. It adds the camera **rng-lens**.
    The installer is not code-signed, so Windows may say "unknown publisher": More info > Run anyway.
 3. Start rng-lens on the PC. On the same Wi-Fi the phone shows up by itself. USB works too (USB debugging on).
 4. Pick **rng-lens** as the camera in Zoom, Discord, OBS, Teams, Meet.
