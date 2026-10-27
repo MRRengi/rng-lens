@@ -55,6 +55,16 @@ public:
     void updateGlass();
     GLuint glassTexture() const { return glass_.tex; }
 
+    // Hold: keep sending a still picture (pause, or the phone dropped out). captureHold() snapshots the
+    // current output; renderHold() rebuilds the output from that snapshot, blurred / dimmed, with the badge.
+    void captureHold();
+    void renderHold(float blur, float dim);
+    // Badge drawn by the caller (it has the fonts): a w x h RGBA target to render into, shown centred near
+    // the bottom of the picture. Call beginBadge(), draw, endBadge().
+    bool beginBadge(int w, int h);
+    void endBadge();
+    void clearBadge() { badgeOn_ = false; }
+
     // Async read of the output (call right after render()), then map/unmap: top-down BGR24, outW*outH*3.
     void beginReadback();
     const uint8_t* mapReadback();
@@ -94,7 +104,9 @@ private:
     float off_[3] = {0, 0, 0};
     std::string bgPath_;
 
-    Target work_, tmp_, hist_, histNext_, q1_, q2_, analysis_, out_, glassA_, glassB_, glass_;
+    Target work_, tmp_, hist_, histNext_, q1_, q2_, analysis_, out_, glassA_, glassB_, glass_, hold_, badge_;
+    Program hold_prog_;
+    bool badgeOn_ = false;
 
     GLuint pbo_ = 0, apbo_ = 0;
     GLsync fence_ = nullptr, afence_ = nullptr;

@@ -28,6 +28,7 @@ final class Settings {
     boolean stab = true;
     boolean audio = true;
     String mic = "voice"; // voice = noise suppression + echo cancel, raw = untouched
+    float[] aeRegion = null; // face for exposure: x0,y0,x1,y1 in 0..1 of the streamed frame; null = whole frame
 
     /** Takes the live camera controls (zoom, focus, exposure, white balance, torch, stabilization) from o. */
     void copyRequestFrom(Settings o) {
@@ -39,6 +40,7 @@ final class Settings {
         awb = o.awb;
         torch = o.torch;
         stab = o.stab;
+        aeRegion = o.aeRegion;
     }
 
     Settings copy() {
@@ -57,6 +59,7 @@ final class Settings {
         c.awb = awb;
         c.torch = torch;
         c.stab = stab;
+        c.aeRegion = aeRegion;
         c.audio = audio;
         c.mic = mic;
         return c;
@@ -102,6 +105,19 @@ final class Settings {
             torch = t;
             stab = s;
             c |= CHANGE_REQUEST;
+        }
+        if (j.has("aeRegion")) {
+            float[] r = null;
+            org.json.JSONArray ra = j.optJSONArray("aeRegion");
+            if (ra != null && ra.length() == 4) {
+                r = new float[4];
+                for (int i = 0; i < 4; i++) r[i] = Math.max(0f, Math.min(1f, (float) ra.optDouble(i, 0)));
+                if (r[2] - r[0] < 0.01f || r[3] - r[1] < 0.01f) r = null;
+            }
+            if (!java.util.Arrays.equals(r, aeRegion)) {
+                aeRegion = r;
+                c |= CHANGE_REQUEST;
+            }
         }
         boolean au = j.optBoolean("audio", audio);
         String mi = j.optString("mic", mic);

@@ -53,6 +53,7 @@ final class Catalog {
         float zoomMin = 1f, zoomMax = 1f;
         boolean zoomRatio; // true = CONTROL_ZOOM_RATIO, false = crop region
         Rect activeArray;
+        int maxAeRegions;
         boolean flash;
         float minFocus; // diopters, 0 = fixed focus
         int evMin, evMax;
@@ -132,6 +133,8 @@ final class Catalog {
         Range<Integer>[] ranges = ch.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);
         if (ranges != null) cam.fpsRanges.addAll(Arrays.asList(ranges));
         cam.activeArray = ch.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+        Integer mr = ch.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE);
+        cam.maxAeRegions = mr == null ? 0 : mr;
         Range<Float> zr = ZOOM_RATIO_RANGE != null ? ch.get(ZOOM_RATIO_RANGE) : null;
         if (zr != null && ZOOM_RATIO != null) {
             cam.zoomRatio = true;
@@ -224,6 +227,7 @@ final class Catalog {
             o.put("fps", fr);
             o.put("zoom", new JSONArray().put((double) cam.zoomMin).put((double) cam.zoomMax));
             o.put("flash", cam.flash);
+            o.put("aeRegions", cam.maxAeRegions > 0);
             o.put("afManual", cam.minFocus > 0);
             o.put("ev", new JSONArray().put(cam.evMin).put(cam.evMax).put((double) cam.evStep));
             o.put("stab", cam.videoStab);

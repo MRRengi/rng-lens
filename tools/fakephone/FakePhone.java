@@ -97,7 +97,7 @@ public final class FakePhone implements Link.Listener {
         return "{\"proto\":1,\"device\":\"" + System.getenv().getOrDefault("FAKE_DEVICE", "rng-lens FakePhone") + "\",\"hevc\":true,\"encoder\":\"ffmpeg\",\"cameras\":["
                 + "{\"id\":\"0\",\"facing\":\"back\",\"sensorOrientation\":90,\"focal\":4.3,"
                 + "\"sizes\":[[1920,1080,60],[1280,720,60],[640,480,30]],\"fps\":[[15,30],[30,30],[60,60]],"
-                + "\"zoom\":[0.6,8.0],\"flash\":true,\"afManual\":true,\"ev\":[-12,12,0.1667],\"stab\":true},"
+                + "\"zoom\":[0.6,8.0],\"flash\":true,\"aeRegions\":true,\"afManual\":true,\"ev\":[-12,12,0.1667],\"stab\":true},"
                 + "{\"id\":\"1\",\"facing\":\"front\",\"sensorOrientation\":270,\"focal\":2.6,"
                 + "\"sizes\":[[1280,720,30],[640,480,30]],\"fps\":[[15,30],[30,30]],"
                 + "\"zoom\":[1.0,4.0],\"flash\":false,\"afManual\":false,\"ev\":[-8,8,0.25],\"stab\":false}],"

@@ -5,6 +5,7 @@
 #include "app.h"
 #include "autoframe.h"
 #include "ui.h"
+#include "updater.h"
 
 #include <algorithm>
 #include <atomic>
@@ -115,6 +116,36 @@ struct Look {
 };
 const Look kLooks[] = {{"none", "None"}, {"warm", "Warm"}, {"cool", "Cool"}, {"film", "Film"},
                        {"vivid", "Vivid"}, {"fade", "Faded"}, {"bw", "Black & white"}};
+
+// Draws a capsule badge ("Be right back", "Reconnecting...") into the renderer's badge target, using
+// the ImGui font atlas and the ImGui GL backend on an off-screen draw list.
+void drawBadge(Renderer& r, const char* icon, const char* text, int outH) {
+    if (ImGui::GetFrameCount() < 1) return; // fonts not ready yet (started straight into the tray)
+    ImFont* f = ui::fonts().badge;
+    float size = std::max(16.f, outH * 0.04f);
+    ImVec2 ts = f->CalcTextSizeA(size, FLT_MAX, 0, text);
+    float iconW = icon ? size * 1.35f : 0.f, padX = size * 0.95f, padY = size * 0.55f;
+    int w = (int)(ts.x + iconW + 2 * padX), h = (int)(ts.y + 2 * padY);
+    if (!r.beginBadge(w, h)) return;
+    ImDrawList dl(ImGui::GetDrawListSharedData());
+    dl._ResetForNewFrame();
+    dl.PushClipRect(ImVec2(0, 0), ImVec2((float)w, (float)h));
+    dl.PushTextureID(ImGui::GetIO().Fonts->TexID);
+    dl.AddRectFilled(ImVec2(0, 0), ImVec2((float)w, (float)h), IM_COL32(16, 16, 18, 200), h / 2.f);
+    if (icon) dl.AddText(f, size, ImVec2(padX, padY), IM_COL32(255, 106, 61, 255), icon);
+    dl.AddText(f, size, ImVec2(padX + iconW, padY), IM_COL32_WHITE, text);
+    ImDrawData dd;
+    dd.Valid = true;
+    dd.CmdLists.push_back(&dl);
+    dd.CmdListsCount = 1;
+    dd.TotalVtxCount = dl.VtxBuffer.Size;
+    dd.TotalIdxCount = dl.IdxBuffer.Size;
+    dd.DisplayPos = ImVec2(0, 0);
+    dd.DisplaySize = ImVec2((float)w, (float)h);
+    dd.FramebufferScale = ImVec2(1, 1);
+    ImGui_ImplOpenGL3_RenderDrawData(&dd);
+    r.endBadge();
+}
 
 // ======================================================================================= Session
 
@@ -262,7 +293,49 @@ struct Session {
                                 f.frameSpeed, crop);
     }
     AutoFrame autoFrame;
+
+    // Face-priority exposure: tell the phone where the face is (in the streamed frame's own coordinates,
+    // before our rotation), so its auto exposure meters on the face and not on a bright window behind it.
+    bool aeSent = false;
+    float aeLast[4] = {0, 0, 0, 0};
+    int64_t aeAt = 0;
+    void updateFaceExposure(int turns) {
+        int64_t now = nowMs();
+        bool on = sp.faceExposure && streaming() && vision.ready() && jv(cam, "aeRegions", false);
+        FaceBox fb = on ? vision.face() : FaceBox();
+        bool face = on && fb.score > 0 && now - fb.atMs < 2000;
+        if (!face) {
+            if (aeSent && (!on || now - aeAt > 2000)) {
+                conn.sendControl({{"aeRegion", nullptr}});
+                aeSent = false;
+                aeAt = now;
+            }
+            return;
+        }
+        // face box, a little larger (forehead and cheeks), in the upright picture
+        float cx = fb.x + fb.w / 2, cy = fb.y + fb.h / 2, hw = fb.w * 0.6f, hh = fb.h * 0.6f;
+        float ux[2] = {cx - hw, cx + hw}, uy[2] = {cy - hh, cy + hh};
+        float r[4] = {1, 1, 0, 0};
+        for (float px : ux)
+            for (float py : uy) {
+                float sx = px, sy = py; // same mapping as the renderer's convert pass
+                if (turns == 1) sx = py, sy = 1 - px;
+                else if (turns == 2) sx = 1 - px, sy = 1 - py;
+                else if (turns == 3) sx = 1 - py, sy = px;
+                r[0] = std::min(r[0], sx), r[1] = std::min(r[1], sy), r[2] = std::max(r[2], sx), r[3] = std::max(r[3], sy);
+            }
+        for (float& v : r) v = std::clamp(v, 0.f, 1.f);
+        float moved = 0;
+        for (int i = 0; i < 4; i++) moved = std::max(moved, std::fabs(r[i] - aeLast[i]));
+        if (aeSent && (moved < 0.04f || now - aeAt < 700)) return;
+        conn.sendControl({{"aeRegion", {r[0], r[1], r[2], r[3]}}});
+        std::copy(r, r + 4, aeLast);
+        aeSent = true;
+        aeAt = now;
+    }
     bool glassWanted = false; // the window is visible: keep the frosted copy for the UI fresh
+    bool paused = false, hadStream = false;
+    int holdKind = 0, badgeKind = 0; // 0 live, 1 paused, 2 phone dropped out
     int64_t lastTick = 0;
 
     // One loop step. Returns the BGR frame for the vcam via the readback inside.
@@ -280,7 +353,7 @@ struct Session {
         }
         OutputTransform t = transform();
         const FilterPrefs& f = sp.filters;
-        bool wantMask = f.background != "off", wantFace = f.autoFrame;
+        bool wantMask = f.background != "off", wantFace = f.autoFrame || sp.faceExposure;
         if ((wantMask || wantFace) && ensureVision()) {
             int aw, ah;
             if (const uint8_t* px = renderer.mapAnalysis(aw, ah)) vision.submit(px, aw, ah, wantMask, wantFace);
@@ -293,7 +366,43 @@ struct Session {
             }
         }
         if (!wantMask) renderer.clearMask();
+        updateFaceExposure(t.quarterTurns);
         bool cropMoved = updateCrop(dt, renderer.workWidth(t.quarterTurns), renderer.workHeight(t.quarterTurns));
+
+        // Hold: paused, or the phone dropped out mid-call. Apps keep getting a still picture with a badge
+        // instead of a frozen or vanished camera.
+        if (streaming() && framesShown > 0) hadStream = true;
+        if (userIdle) hadStream = false;
+        bool reconnecting = hadStream && !streaming() && renderer.hasFrame();
+        int kind = paused && renderer.hasFrame() ? 1 : reconnecting ? 2 : 0;
+        if (kind != holdKind) {
+            if (kind && !holdKind) renderer.captureHold();
+            if (!kind) dirty = true; // live again: re-render right away
+            holdKind = kind;
+            badgeKind = 0;
+        }
+        if (holdKind) {
+            int want = holdKind == 1 ? 1 : sp.autoConnect ? 2 : 3;
+            if (badgeKind != want && ImGui::GetFrameCount() > 0) {
+                const char* texts[] = {"", "Be right back", "Reconnecting...", "Phone disconnected"};
+                const char* icons[] = {nullptr, ui::icon::pause, ui::icon::wifiOff, ui::icon::wifiOff};
+                drawBadge(renderer, icons[want], texts[want], renderer.outputHeight());
+                badgeKind = want;
+            }
+            bool pendingHold = false;
+            if (now - lastRenderMs >= 33) {
+                renderer.renderHold(holdKind == 1 ? 1.f : 0.f, holdKind == 1 ? 0.25f : 0.35f);
+                if (glassWanted) renderer.updateGlass();
+                lastRenderMs = now;
+                if (dumpNow || (vcam && vcam->running() && vcam->watched())) {
+                    renderer.beginReadback();
+                    pendingHold = true;
+                }
+            }
+            rates(now);
+            readbackPending = pendingHold;
+            return;
+        }
 
         bool changed = t.quarterTurns != lastT.quarterTurns || t.mirror != lastT.mirror || t.flip != lastT.flip ||
                        sp.outWidth != lastOutW || sp.outHeight != lastOutH || dirty;
@@ -399,7 +508,9 @@ public:
         else glfwShowWindow(win_);
 
         while (!glfwWindowShouldClose(win_) && !quit_) {
-            glfwWaitEventsTimeout(0.25);
+            bool holding = false;
+            for (int i = 0; i < active(); i++) holding |= sessions_[i]->holdKind != 0;
+            glfwWaitEventsTimeout(holding ? 0.03 : 0.25);
             tick();
         }
 
@@ -500,6 +611,12 @@ private:
         bool visible = glfwGetWindowAttrib(win_, GLFW_VISIBLE) && !glfwGetWindowAttrib(win_, GLFW_ICONIFIED);
         for (int i = 0; i < active(); i++) sessions_[i]->glassWanted = visible && i == tab_;
         if (visible) syncTheme();
+        int64_t nowU = nowMs();
+        if (prefs_.autoUpdate && (lastUpdateCheck_ == 0 || nowU - lastUpdateCheck_ > 6 * 3600 * 1000LL)) {
+            lastUpdateCheck_ = nowU;
+            updater_.check(RNGLENS_VERSION);
+        }
+        if (updater_.state() == Updater::State::Ready && updater_.launchInstaller()) quit_ = true;
         if (visible) drawUi();
         for (int i = 0; i < active(); i++) sessions_[i]->deliver(dump && i == 0, opt_.dumpOutput, quit_);
         if (visible) glfwSwapBuffers(win_);
@@ -548,6 +665,11 @@ private:
             case Shell::ToggleFrame:
                 s.sp.filters.autoFrame = !s.sp.filters.autoFrame;
                 break;
+            case Shell::TogglePause: {
+                bool p = !s.paused;
+                for (int i = 0; i < active(); i++) sessions_[i]->paused = p;
+                break;
+            }
         }
         s.dirty = true;
         prefs_.save();
@@ -766,6 +888,40 @@ private:
             if (ui::sidebarItem(it.icon, it.label, section_ == it.id, badge)) section_ = it.id;
         }
         ImGui::PopStyleVar();
+        drawUpdateCard();
+    }
+
+    // Bottom of the sidebar: a newer release is out.
+    void drawUpdateCard() {
+        Updater::State st = updater_.state();
+        if (st != Updater::State::Available && st != Updater::State::Downloading && st != Updater::State::Ready) return;
+        const ui::Palette& P = ui::P();
+        const float S = ui::S();
+        float w = ImGui::GetContentRegionAvail().x, h = 92 * S;
+        float y = ImGui::GetWindowHeight() - h - 14 * S;
+        if (ImGui::GetCursorPosY() > y) return; // window too short
+        ImGui::SetCursorPosY(y);
+        ImVec2 a = ImGui::GetCursorScreenPos();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRectFilled(a, ImVec2(a.x + w, a.y + h), ui::col(P.group, P.dark ? 1.f : 0.85f), 10 * S);
+        ImGui::SetCursorScreenPos(ImVec2(a.x + 12 * S, a.y + 10 * S));
+        ImGui::BeginGroup();
+        ImGui::PushFont(ui::fonts().strong);
+        std::string head = std::string(ui::icon::download) + "  rng-lens " + updater_.latest();
+        ui::text(head.c_str(), P.label);
+        ImGui::PopFont();
+        ImGui::PushFont(ui::fonts().small);
+        ui::textSecondary(st == Updater::State::Available ? "A new version is out." : "Downloading...");
+        ImGui::PopFont();
+        ImGui::Dummy(ImVec2(0, 4 * S));
+        ImGui::PushItemWidth(w - 24 * S);
+        if (st == Updater::State::Available) {
+            if (ui::button("Update now", true, w - 24 * S)) updater_.download();
+        } else {
+            ui::meter(updater_.progress(), P.accent);
+        }
+        ImGui::PopItemWidth();
+        ImGui::EndGroup();
     }
 
     // ---------------------------------------------------------------- preview
@@ -781,7 +937,7 @@ private:
         float r = 14 * S;
         dl->AddRectFilled(a, b, ui::col(P.preview), r);
 
-        bool live = s.streaming() && s.renderer.hasFrame();
+        bool live = (s.streaming() || s.holdKind) && s.renderer.hasFrame();
         ImVec2 pa = a, pb = b;
         float ow = (float)s.renderer.outputWidth(), oh = (float)s.renderer.outputHeight();
         if (live && ow > 0 && oh > 0) {
@@ -811,7 +967,7 @@ private:
         // Bottom: the glass toolbar with the things people toggle mid-call.
         FilterPrefs& f = s.sp.filters;
         bool torch = jv(s.cam, "flash", false);
-        int n = 5 + (torch ? 1 : 0);
+        int n = 6 + (torch ? 1 : 0);
         float bs = 38 * S, gap = 6 * S, padx = 8 * S;
         float tw = n * bs + (n - 1) * gap + 2 * padx, th = bs + 2 * 7 * S;
         ImVec2 ta((pa.x + pb.x - tw) / 2, pb.y - th - 16 * S), tb(ta.x + tw, ta.y + th);
@@ -819,6 +975,9 @@ private:
         ImGui::SetCursorScreenPos(ImVec2(ta.x + padx, ta.y + 7 * S));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(gap, 0));
         bool ch = false;
+        if (ui::glassButton(s.paused ? ui::icon::play : ui::icon::pause, s.paused ? "Resume camera" : "Pause camera (Be right back)", s.paused, bs))
+            command(Shell::TogglePause);
+        ImGui::SameLine();
         if (ui::glassButton(ui::icon::focus, "Background blur", f.background == "blur", bs)) {
             f.background = f.background == "blur" ? "off" : "blur";
             ch = true;
@@ -1182,6 +1341,7 @@ private:
             }
             ui::rowEnd();
         }
+        if (jv(s.cam, "aeRegions", false) && toggleRow("Expose for my face", &s.sp.faceExposure)) prefs_.save();
         bool aeLock = ui_.ae == "lock", wbLock = ui_.awb == "lock";
         if (toggleRow("Lock exposure", &aeLock)) {
             ui_.ae = aeLock ? "lock" : "auto";
@@ -1193,7 +1353,7 @@ private:
         }
         if (jv(s.cam, "flash", false) && toggleRow("Torch", &ui_.torch)) s.conn.sendControl({{"torch", ui_.torch}});
         if (jv(s.cam, "stab", false) && toggleRow("Stabilization", &ui_.stab)) s.conn.sendControl({{"stab", ui_.stab}});
-        ui::endGroup();
+        ui::endGroup(s.sp.faceExposure ? "Expose for my face keeps you bright even with a window behind you." : nullptr);
     }
 
     // Effect slider row; double-click resets.
@@ -1512,6 +1672,28 @@ private:
             save = true;
         }
         ui::endGroup("A second phone shows up as its own camera, \"rng-lens 2\".");
+
+        ui::beginGroup("Updates");
+        if (toggleRow("Check for updates", &prefs_.autoUpdate)) save = true;
+        ui::row("Version " RNGLENS_VERSION, 120 * ui::S());
+        Updater::State us = updater_.state();
+        bool busy = us == Updater::State::Checking || us == Updater::State::Downloading;
+        if (us == Updater::State::Available) {
+            if (ui::button("Update", true, -1)) updater_.download();
+        } else if (ui::button(busy ? "Checking..." : "Check now", false, -1) && !busy) {
+            updater_.check(RNGLENS_VERSION);
+        }
+        ui::rowEnd();
+        std::string foot;
+        switch (us) {
+        case Updater::State::UpToDate: foot = "You have the latest version."; break;
+        case Updater::State::Available: foot = "rng-lens " + updater_.latest() + " is out."; break;
+        case Updater::State::Downloading: foot = "Downloading the installer..."; break;
+        case Updater::State::Failed: foot = "Couldn't check: " + updater_.error() + "."; break;
+        case Updater::State::Unsupported: foot = "Updates are checked on Windows only."; break;
+        default: foot = "Only the version number is fetched from GitHub. Nothing about you is sent."; break;
+        }
+        ui::endGroup(foot.c_str());
         if (save) prefs_.save();
     }
 
@@ -1588,7 +1770,8 @@ private:
     Discovery disc_;
     Shell shell_;
     bool autostart_ = false, quit_ = false;
-    int64_t lastTrayAt_ = 0, lastThemeAt_ = 0;
+    int64_t lastTrayAt_ = 0, lastThemeAt_ = 0, lastUpdateCheck_ = 0;
+    Updater updater_;
     int section_ = 0;
     float scale_ = 1.f;
     bool dark_ = true;

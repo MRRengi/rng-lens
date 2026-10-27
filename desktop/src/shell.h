@@ -9,7 +9,7 @@ struct GLFWwindow;
 
 class Shell {
 public:
-    enum Command { Show = 1, Quit, ToggleMute, ToggleMirror, ToggleTorch, ToggleBackground, ToggleFrame };
+    enum Command { Show = 1, Quit, ToggleMute, ToggleMirror, ToggleTorch, ToggleBackground, ToggleFrame, TogglePause };
 
     struct Hotkey {
         const char* keys;

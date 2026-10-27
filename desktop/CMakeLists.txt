@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(rng-lens VERSION 1.1.1 LANGUAGES C CXX)
+project(rng-lens VERSION 1.2.0 LANGUAGES C CXX)
 set(RNGLENS_VERSION "" CACHE STRING "Version shown in the app (empty = the project version)")
 if(NOT RNGLENS_VERSION)
     set(RNGLENS_VERSION "${PROJECT_VERSION}")
@@ -88,7 +88,7 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fonts_embed.cpp
 add_executable(rng-lens
   src/main.cpp src/app.cpp src/headless.cpp src/connection.cpp src/decoder.cpp src/discovery.cpp
   src/platform.cpp src/prefs.cpp src/renderer.cpp src/audio.cpp src/miniaudio_impl.c src/vision.cpp src/shell.cpp src/stb_impl.cpp src/vcam_windows.cpp src/vcam_linux.cpp
-  src/ui.cpp ${CMAKE_CURRENT_BINARY_DIR}/fonts_embed.cpp
+  src/ui.cpp src/updater.cpp ${CMAKE_CURRENT_BINARY_DIR}/fonts_embed.cpp
   ${TP}/glad/src/gl.c
   ${IMGUI}/imgui.cpp ${IMGUI}/imgui_draw.cpp ${IMGUI}/imgui_tables.cpp ${IMGUI}/imgui_widgets.cpp
   ${IMGUI}/backends/imgui_impl_glfw.cpp ${IMGUI}/backends/imgui_impl_opengl3.cpp)
@@ -97,7 +97,7 @@ target_compile_definitions(rng-lens PRIVATE RNGLENS_VERSION="${RNGLENS_VERSION}"
 target_link_libraries(rng-lens PRIVATE ${FFMPEG_TARGET} ${GLFW_TARGET})
 if(WIN32)
   target_sources(rng-lens PRIVATE res/rng-lens.rc)
-  target_link_libraries(rng-lens PRIVATE ws2_32 shell32 ole32 comdlg32 dwmapi advapi32)
+  target_link_libraries(rng-lens PRIVATE ws2_32 shell32 ole32 comdlg32 dwmapi advapi32 winhttp)
   if(MINGW)
     target_link_options(rng-lens PRIVATE -mwindows -static -static-libgcc -static-libstdc++ -s)
   endif()

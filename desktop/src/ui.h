@@ -50,6 +50,11 @@ constexpr const char* camera = "\xee\x81\xa8";
 constexpr const char* power = "\xee\x85\x84";
 constexpr const char* refresh = "\xee\x85\x89";
 constexpr const char* hand = "\xee\x87\x97";
+constexpr const char* pause = "\xee\x84\xb2";
+constexpr const char* play = "\xee\x85\x80";
+constexpr const char* download = "\xee\x82\xb6";
+constexpr const char* wifiOff = "\xee\x86\xaf";
+constexpr const char* sunMedium = "\xee\x8a\xb1";
 }  // namespace icon
 
 struct Palette {
@@ -68,6 +73,7 @@ struct Fonts {
     ImFont* small = nullptr;  // 12 regular (+ icons)
     ImFont* title = nullptr;  // 20 semibold (+ icons)
     ImFont* icons = nullptr;  // 18 icons only, for toolbar buttons
+    ImFont* badge = nullptr;  // 44 semibold, for text drawn into the camera picture
 };
 
 void loadFonts(float scale);

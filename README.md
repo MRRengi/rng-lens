@@ -37,8 +37,11 @@ no pro version: every feature is included.
 - Heat guard: the phone watches Android's own thermal forecast and steps down fps, resolution and
   bitrate before it overheats, then back up when it cools. Battery, temperature and a temperature graph on the PC
 - Keeps streaming with the phone's screen locked (screen off = coolest phone)
+- Pause button ("Be right back") and a frozen frame with "Reconnecting..." if Wi-Fi drops, so calls never see a dead camera
+- Exposure on your face: no silhouette with a window behind you
+- Updates itself from inside the PC app
 - Clean macOS-style look on the PC and the phone, light and dark with the system
-- Tray icon, start with Windows, global hotkeys (Ctrl+Alt+M/R/T/B/F)
+- Tray icon, start with Windows, global hotkeys (Ctrl+Alt+M/R/T/B/F/P)
 - Optional second phone as a second camera, "rng-lens 2"
 
 ## Why it's light on the phone

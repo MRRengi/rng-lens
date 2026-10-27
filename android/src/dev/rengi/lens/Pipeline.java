@@ -6,6 +6,7 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.params.MeteringRectangle;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
@@ -292,6 +293,7 @@ final class Pipeline {
             }
 
             b.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+            applyAeRegion(b, s);
             b.set(CaptureRequest.CONTROL_AE_LOCK, "lock".equals(s.ae));
             b.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, Math.max(cam.evMin, Math.min(cam.evMax, s.ev)));
             b.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
@@ -357,6 +359,48 @@ final class Pipeline {
             device = null;
         }
         releaseEncoder();
+    }
+
+    /**
+     * Meter exposure on the face the PC found. With CONTROL_ZOOM_RATIO the 3A regions are in active-array
+     * units over the zoomed field of view; with the crop-region zoom they are absolute in the active array,
+     * so the region is mapped into the crop. The streamed frame is a centre crop of that field to its aspect.
+     */
+    private void applyAeRegion(CaptureRequest.Builder b, Settings s) {
+        if (cam.maxAeRegions < 1 || cam.activeArray == null) return;
+        Rect a = cam.activeArray;
+        float fx = 0, fy = 0, fw = a.width(), fh = a.height();
+        float z = clamp(s.zoom, cam.zoomMin, cam.zoomMax);
+        if (!cam.zoomRatio && z > 1.001f) {
+            fw = a.width() / z;
+            fh = a.height() / z;
+            fx = (a.width() - fw) / 2;
+            fy = (a.height() - fh) / 2;
+        }
+        if (s.aeRegion == null) {
+            b.set(CaptureRequest.CONTROL_AE_REGIONS, new MeteringRectangle[]{
+                    new MeteringRectangle(0, 0, a.width() - 1, a.height() - 1, MeteringRectangle.METERING_WEIGHT_DONT_CARE)});
+            return;
+        }
+        float sa = (float) width() / Math.max(1, height()), fa = fw / fh;
+        if (sa > fa) { // stream is wider: top and bottom of the field are cut
+            float vh = fw / sa;
+            fy += (fh - vh) / 2;
+            fh = vh;
+        } else {
+            float vw = fh * sa;
+            fx += (fw - vw) / 2;
+            fw = vw;
+        }
+        float[] r = s.aeRegion;
+        int x0 = Math.round(fx + r[0] * fw), y0 = Math.round(fy + r[1] * fh);
+        int x1 = Math.round(fx + r[2] * fw), y1 = Math.round(fy + r[3] * fh);
+        x0 = Math.max(0, Math.min(a.width() - 2, x0));
+        y0 = Math.max(0, Math.min(a.height() - 2, y0));
+        x1 = Math.max(x0 + 1, Math.min(a.width() - 1, x1));
+        y1 = Math.max(y0 + 1, Math.min(a.height() - 1, y1));
+        b.set(CaptureRequest.CONTROL_AE_REGIONS, new MeteringRectangle[]{
+                new MeteringRectangle(x0, y0, x1 - x0, y1 - y0, MeteringRectangle.METERING_WEIGHT_MAX)});
     }
 
     private void applyZoom(CaptureRequest.Builder b, float zoom) {

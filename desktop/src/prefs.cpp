@@ -52,7 +52,7 @@ bool FilterPrefs::anyActive() const {
 
 json SlotPrefs::toJson() const {
     return {{"lastHost", lastHost}, {"lastPort", lastPort},     {"autoConnect", autoConnect},
-            {"autoRotate", autoRotate}, {"extraTurns", extraTurns}, {"mirror", mirror},
+            {"autoRotate", autoRotate}, {"extraTurns", extraTurns}, {"mirror", mirror}, {"faceExposure", faceExposure},
             {"flip", flip},           {"outWidth", outWidth},     {"outHeight", outHeight},
             {"outFps", outFps},       {"virtualCamera", virtualCamera}, {"phone", phone},
             {"filters", filters.toJson()}};
@@ -66,6 +66,7 @@ void SlotPrefs::fromJson(const json& j) {
     get(j, "extraTurns", extraTurns);
     extraTurns &= 3;
     get(j, "mirror", mirror);
+    get(j, "faceExposure", faceExposure);
     get(j, "flip", flip);
     get(j, "outWidth", outWidth);
     get(j, "outHeight", outHeight);
@@ -97,6 +98,7 @@ void Prefs::load() {
     get(j, "closeToTray", closeToTray);
     get(j, "hotkeys", hotkeys);
     get(j, "theme", theme);
+    get(j, "autoUpdate", autoUpdate);
 }
 
 void Prefs::save() const {
@@ -111,7 +113,8 @@ void Prefs::save() const {
               {"muted", muted},
               {"closeToTray", closeToTray},
               {"hotkeys", hotkeys},
-              {"theme", theme}};
+              {"theme", theme},
+              {"autoUpdate", autoUpdate}};
     std::ofstream out(path());
     out << j.dump(2);
 }

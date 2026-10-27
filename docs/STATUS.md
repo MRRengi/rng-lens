@@ -25,8 +25,17 @@ DONE
   controls, frosted-glass toolbar over the preview, Inter font, light / dark with Windows (or forced in
   Settings), orange accent. Phone: iOS-style grouped screen, light / dark with the system
 
+- v1.1.1: installer replaces camera DLLs that call apps still hold (rename aside, delete on reboot);
+  releases carry exactly two files
+- v1.2.0: pause ("Be right back", blurred) on the glass toolbar, Ctrl+Alt+P and the tray; when the phone
+  drops out the camera keeps the last frame with "Reconnecting..."; in-app update (GitHub release check,
+  one click downloads and starts the installer); exposure on the face (phone meters AE on the face the PC
+  finds). Checked: several apps reading the camera at once already works (Wine, 2 readers)
+
 *WE ARE HERE*
-- Maks: install 1.1.0 and look at the new design on PC and phone; turn on GitHub Pages (Settings > Pages > GitHub Actions)
+- Maks: install 1.2.0: pause, pull Wi-Fi mid-call, face exposure against a window, the phone screen design;
+  tell what exactly Teams showed (which camera picked, which other apps were open)
+- Maks: turn on GitHub Pages (Settings > Pages > GitHub Actions)
 - Maks: AlternativeTo, GitHub topics, awesome-list PRs (promo kit); Reddit r/SideProject + X posts
 
 AHEAD

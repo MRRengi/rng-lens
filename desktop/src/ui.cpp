@@ -96,10 +96,11 @@ void loadFonts(float scale) {
     g_f.title = addText("600", 20.f * scale);
     static const ImWchar icons[] = {0xE000, 0xE600, 0};
     g_f.icons = addFont("lucide.ttf", 18.f * scale, icons, false);
+    g_f.badge = addText("600", 44.f);
     if (!g_f.body) { // fonts not embedded: fall back to ImGui's own
         ImFontConfig cfg;
         cfg.SizePixels = 14.f * scale;
-        g_f.body = g_f.strong = g_f.small = g_f.title = g_f.icons = io.Fonts->AddFontDefault(&cfg);
+        g_f.body = g_f.strong = g_f.small = g_f.title = g_f.icons = g_f.badge = io.Fonts->AddFontDefault(&cfg);
     }
     io.FontDefault = g_f.body;
 }

@@ -30,6 +30,7 @@ const KeyDef kKeys[] = {
     {Shell::ToggleTorch, MOD_CONTROL | MOD_ALT, 'T', "Ctrl+Alt+T", "torch"},
     {Shell::ToggleBackground, MOD_CONTROL | MOD_ALT, 'B', "Ctrl+Alt+B", "background blur on/off"},
     {Shell::ToggleFrame, MOD_CONTROL | MOD_ALT, 'F', "Ctrl+Alt+F", "auto-frame on/off"},
+    {Shell::TogglePause, MOD_CONTROL | MOD_ALT, 'P', "Ctrl+Alt+P", "pause the camera (Be right back)"},
 };
 
 LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
@@ -48,6 +49,7 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             AppendMenuW(m, MF_STRING, Shell::Show, L"Open rng-lens");
             AppendMenuW(m, MF_STRING, Shell::ToggleMute, L"Mute / unmute mic");
             AppendMenuW(m, MF_STRING, Shell::ToggleMirror, L"Mirror");
+            AppendMenuW(m, MF_STRING, Shell::TogglePause, L"Pause / resume camera");
             AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
             AppendMenuW(m, MF_STRING, Shell::Quit, L"Quit (turns the camera off)");
             POINT pt;

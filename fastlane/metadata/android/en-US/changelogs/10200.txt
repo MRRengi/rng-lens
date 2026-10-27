@@ -1,0 +1,4 @@
+- Pause button: your call sees a blurred picture with "Be right back"
+- If the connection drops, calls keep the last picture with "Reconnecting..." instead of losing the camera
+- Exposure follows your face, so a window behind you no longer turns you into a silhouette
+- Updates from inside the PC app

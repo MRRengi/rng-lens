@@ -37,6 +37,7 @@ struct SlotPrefs {
     int extraTurns = 0;
     bool mirror = false;
     bool flip = false;
+    bool faceExposure = false; // meter exposure on the face (needs the face model)
     int outWidth = 1920;
     int outHeight = 1080;
     int outFps = 30;
@@ -61,6 +62,7 @@ struct Prefs {
     bool closeToTray = true;
     bool hotkeys = true;
     std::string theme = "system"; // system | light | dark
+    bool autoUpdate = true;       // ask GitHub for a newer release now and then
 
     void load();
     void save() const;

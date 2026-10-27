@@ -179,6 +179,22 @@ void main() {
 }
 )";
 
+// Still picture for pause / reconnect: blurred and dimmed snapshot, plus the badge (premultiplied RGBA).
+static const char* kHold = R"(#version 330 core
+in vec2 vUv; out vec4 o; uniform sampler2D src, blurred, badge; uniform float blurMix, dim;
+uniform vec4 rect; uniform bool hasBadge;
+void main() {
+    vec3 c = mix(texture(src, vUv).rgb, texture(blurred, vUv).rgb, blurMix) * (1.0 - dim);
+    if (hasBadge && vUv.x >= rect.x && vUv.x <= rect.z && vUv.y >= rect.y && vUv.y <= rect.w) {
+        vec2 b = (vUv - rect.xy) / (rect.zw - rect.xy);
+        b.y = 1.0 - b.y; // the badge was drawn top-down by ImGui, the output is stored top row first
+        vec4 t = texture(badge, b);
+        c = c * (1.0 - t.a) + t.rgb;
+    }
+    o = vec4(c, 1.0);
+}
+)";
+
 static GLuint compile(GLenum type, const char* src) {
     GLuint s = glCreateShader(type);
     glShaderSource(s, 1, &src, nullptr);
@@ -245,6 +261,7 @@ bool Renderer::init() {
     smooth_ = build(kSmooth);
     color_ = build(kColor);
     output_ = build(kOutput);
+    hold_prog_ = build(kHold);
     glUseProgram(convert_.id);
     glUniform1i(convert_.loc("texY"), 0);
     glUniform1i(convert_.loc("texU"), 1);
@@ -273,11 +290,11 @@ void Renderer::shutdown() {
     if (afence_) glDeleteSync(afence_);
     if (pbo_) glDeleteBuffers(1, &pbo_);
     if (apbo_) glDeleteBuffers(1, &apbo_);
-    for (Target* t : {&work_, &tmp_, &hist_, &histNext_, &q1_, &q2_, &analysis_, &out_, &glassA_, &glassB_, &glass_}) t->release();
+    for (Target* t : {&work_, &tmp_, &hist_, &histNext_, &q1_, &q2_, &analysis_, &out_, &glassA_, &glassB_, &glass_, &hold_, &badge_}) t->release();
     GLuint t[5] = {texY_, texU_, texV_, maskTex_, bgTex_};
     glDeleteTextures(5, t);
     glDeleteVertexArrays(1, &vao_);
-    for (Program* p : {&convert_, &night_, &down_, &gauss_, &composite_, &smooth_, &color_, &output_}) glDeleteProgram(p->id);
+    for (Program* p : {&convert_, &night_, &down_, &gauss_, &composite_, &smooth_, &color_, &output_, &hold_prog_}) glDeleteProgram(p->id);
 }
 
 void Renderer::ensurePlanes(int w, int h, bool nv12) {
@@ -400,6 +417,54 @@ void Renderer::blurInto(const Target& src, float strength) {
         bindTex(0, q2_.tex);
         draw(q1_);
     }
+}
+
+void Renderer::captureHold() {
+    if (!out_.fbo) return;
+    hold_.ensure(out_.w, out_.h);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, out_.fbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hold_.fbo);
+    glBlitFramebuffer(0, 0, out_.w, out_.h, 0, 0, hold_.w, hold_.h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void Renderer::renderHold(float blur, float dim) {
+    if (!hold_.fbo || !out_.fbo) return;
+    if (blur > 0) blurInto(hold_, blur);
+    glUseProgram(hold_prog_.id);
+    glUniform1i(hold_prog_.loc("src"), 0);
+    glUniform1i(hold_prog_.loc("blurred"), 1);
+    glUniform1i(hold_prog_.loc("badge"), 2);
+    glUniform1f(hold_prog_.loc("blurMix"), blur > 0 ? 1.f : 0.f);
+    glUniform1f(hold_prog_.loc("dim"), dim);
+    glUniform1i(hold_prog_.loc("hasBadge"), badgeOn_ && badge_.tex);
+    if (badgeOn_ && badge_.tex) {
+        // In the middle of the picture (output uv y = 0 is the top row).
+        float bw = (float)badge_.w / out_.w, bh = (float)badge_.h / out_.h;
+        glUniform4f(hold_prog_.loc("rect"), 0.5f - bw / 2, 0.5f - bh / 2, 0.5f + bw / 2, 0.5f + bh / 2);
+    }
+    bindTex(0, hold_.tex);
+    bindTex(1, blur > 0 ? q1_.tex : hold_.tex);
+    bindTex(2, badge_.tex);
+    draw(out_);
+    glActiveTexture(GL_TEXTURE0);
+    glBindVertexArray(0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+bool Renderer::beginBadge(int w, int h) {
+    if (w <= 0 || h <= 0) return false;
+    badge_.ensure(w, h);
+    glBindFramebuffer(GL_FRAMEBUFFER, badge_.fbo);
+    glViewport(0, 0, w, h);
+    glClearColor(0, 0, 0, 0);
+    glClear(GL_COLOR_BUFFER_BIT);
+    return true;
+}
+
+void Renderer::endBadge() {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    badgeOn_ = true;
 }
 
 void Renderer::updateGlass() {

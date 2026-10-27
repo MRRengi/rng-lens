@@ -14,6 +14,9 @@ Your phone as a webcam and microphone. Free, open source, no watermark, no accou
 - Heat guard: the phone lowers fps / resolution before it overheats and goes back when it cools.
   Battery and temperature are shown on the PC
 - Lock the phone's screen and keep streaming
+- Pause ("Be right back") and "Reconnecting..." with the last picture if Wi-Fi drops
+- Exposure on your face, so a window behind you doesn't turn you into a silhouette
+- Updates itself: the PC app tells you when a new version is out and installs it in one click
 - Phone microphone (voice or raw). To use it as a mic in calls, install the free
   [VB-Cable](https://vb-audio.com/Cable/) and pick "CABLE Input" in rng-lens
 - New macOS-style look, light and dark with Windows; a glass toolbar over the preview for the things you toggle mid-call
