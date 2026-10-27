@@ -1,0 +1,2 @@
+- New look on the PC and the phone: light and dark with the system
+- Glass toolbar over the preview for blur, auto-frame, mirror, mic and torch

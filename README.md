@@ -37,6 +37,7 @@ no pro version: every feature is included.
 - Heat guard: the phone watches Android's own thermal forecast and steps down fps, resolution and
   bitrate before it overheats, then back up when it cools. Battery, temperature and a temperature graph on the PC
 - Keeps streaming with the phone's screen locked (screen off = coolest phone)
+- Clean macOS-style look on the PC and the phone, light and dark with the system
 - Tray icon, start with Windows, global hotkeys (Ctrl+Alt+M/R/T/B/F)
 - Optional second phone as a second camera, "rng-lens 2"
 
@@ -112,5 +113,5 @@ or push a tag `vX.Y.Z` - CI builds, benches and publishes the Release with the t
 
 ## License
 
-MIT. Softcam is MIT (see its LICENSE), miniaudio is public domain / MIT-0, ONNX Runtime is MIT,
+MIT. Softcam is MIT (see its LICENSE), Inter is OFL-1.1, Lucide icons are ISC, miniaudio is public domain / MIT-0, ONNX Runtime is MIT,
 PP-HumanSeg is Apache-2.0, YuNet is MIT. FFmpeg is LGPL and linked dynamically.

@@ -273,7 +273,7 @@ void Renderer::shutdown() {
     if (afence_) glDeleteSync(afence_);
     if (pbo_) glDeleteBuffers(1, &pbo_);
     if (apbo_) glDeleteBuffers(1, &apbo_);
-    for (Target* t : {&work_, &tmp_, &hist_, &histNext_, &q1_, &q2_, &analysis_, &out_}) t->release();
+    for (Target* t : {&work_, &tmp_, &hist_, &histNext_, &q1_, &q2_, &analysis_, &out_, &glassA_, &glassB_, &glass_}) t->release();
     GLuint t[5] = {texY_, texU_, texV_, maskTex_, bgTex_};
     glDeleteTextures(5, t);
     glDeleteVertexArrays(1, &vao_);
@@ -400,6 +400,35 @@ void Renderer::blurInto(const Target& src, float strength) {
         bindTex(0, q2_.tex);
         draw(q1_);
     }
+}
+
+void Renderer::updateGlass() {
+    if (!out_.tex || out_.w < 64) return;
+    // out -> 1/4 -> 1/16 (box-filtered), then a wide gaussian: a frosted copy for the glass UI.
+    int w4 = std::max(16, out_.w / 4), h4 = std::max(16, out_.h / 4);
+    int w16 = std::max(8, out_.w / 16), h16 = std::max(8, out_.h / 16);
+    glassA_.ensure(w4, h4);
+    glass_.ensure(w16, h16);
+    glassB_.ensure(w16, h16);
+    glUseProgram(down_.id);
+    glUniform1i(down_.loc("src"), 0);
+    glUniform2f(down_.loc("texel"), 1.f / out_.w, 1.f / out_.h);
+    bindTex(0, out_.tex);
+    draw(glassA_);
+    glUniform2f(down_.loc("texel"), 1.f / w4, 1.f / h4);
+    bindTex(0, glassA_.tex);
+    draw(glass_);
+    glUseProgram(gauss_.id);
+    glUniform1i(gauss_.loc("src"), 0);
+    for (int i = 0; i < 2; i++) {
+        glUniform2f(gauss_.loc("dir"), (1.f + i) / w16, 0.f);
+        bindTex(0, glass_.tex);
+        draw(glassB_);
+        glUniform2f(gauss_.loc("dir"), 0.f, (1.f + i) / h16);
+        bindTex(0, glassB_.tex);
+        draw(glass_);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void Renderer::render(int outW, int outH, const OutputTransform& t, const FilterPrefs& f, const CropRect& crop, bool newFrame) {

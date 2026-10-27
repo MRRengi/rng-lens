@@ -96,6 +96,7 @@ void Prefs::load() {
     get(j, "muted", muted);
     get(j, "closeToTray", closeToTray);
     get(j, "hotkeys", hotkeys);
+    get(j, "theme", theme);
 }
 
 void Prefs::save() const {
@@ -109,7 +110,8 @@ void Prefs::save() const {
               {"volume", volume},
               {"muted", muted},
               {"closeToTray", closeToTray},
-              {"hotkeys", hotkeys}};
+              {"hotkeys", hotkeys},
+              {"theme", theme}};
     std::ofstream out(path());
     out << j.dump(2);
 }

@@ -60,6 +60,7 @@ struct Prefs {
     bool muted = false;
     bool closeToTray = true;
     bool hotkeys = true;
+    std::string theme = "system"; // system | light | dark
 
     void load();
     void save() const;

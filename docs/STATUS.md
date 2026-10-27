@@ -20,10 +20,17 @@ DONE
 - v1.0.1: zoom / focus / exposure / torch from the PC work again (broke in 1.0); auto-frame follows
   smoothly (filtered detections, dead zone, spring) instead of twitching. Released
 
+- v1.0.2: project website + privacy policy (site/), store texts (fastlane/), stable download links
+- v1.1.0: Apple-style redesign. PC: sidebar + preview + inspector, grouped cards, switches, segmented
+  controls, frosted-glass toolbar over the preview, Inter font, light / dark with Windows (or forced in
+  Settings), orange accent. Phone: iOS-style grouped screen, light / dark with the system
+
 *WE ARE HERE*
-- Maks: install 1.0.1, check zoom and auto-frame; a long session for heat; Reddit r/SideProject + X posts
+- Maks: install 1.1.0 and look at the new design on PC and phone; turn on GitHub Pages (Settings > Pages > GitHub Actions)
+- Maks: AlternativeTo, GitHub topics, awesome-list PRs (promo kit); Reddit r/SideProject + X posts
 
 AHEAD
 - Fix what the real phone / real GPU show
+- v2: camera for several apps at once (the Teams "in use" error), Windows 11 Media Foundation camera
 - Google Play (targetSdk 36, camera+mic service types, AAB, privacy page), F-Droid; support button on PC
 - Windows 11 Media Foundation camera (Windows Camera app), iOS app

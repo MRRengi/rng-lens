@@ -51,6 +51,9 @@ public:
     GLuint outputTexture() const { return out_.tex; }
     int outputWidth() const { return out_.w; }
     int outputHeight() const { return out_.h; }
+    // Heavily blurred small copy of the output for the UI's frosted-glass panels. updateGlass() after render().
+    void updateGlass();
+    GLuint glassTexture() const { return glass_.tex; }
 
     // Async read of the output (call right after render()), then map/unmap: top-down BGR24, outW*outH*3.
     void beginReadback();
@@ -91,7 +94,7 @@ private:
     float off_[3] = {0, 0, 0};
     std::string bgPath_;
 
-    Target work_, tmp_, hist_, histNext_, q1_, q2_, analysis_, out_;
+    Target work_, tmp_, hist_, histNext_, q1_, q2_, analysis_, out_, glassA_, glassB_, glass_;
 
     GLuint pbo_ = 0, apbo_ = 0;
     GLsync fence_ = nullptr, afence_ = nullptr;

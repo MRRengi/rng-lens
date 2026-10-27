@@ -16,6 +16,7 @@ Your phone as a webcam and microphone. Free, open source, no watermark, no accou
 - Lock the phone's screen and keep streaming
 - Phone microphone (voice or raw). To use it as a mic in calls, install the free
   [VB-Cable](https://vb-audio.com/Cable/) and pick "CABLE Input" in rng-lens
+- New macOS-style look, light and dark with Windows; a glass toolbar over the preview for the things you toggle mid-call
 - Tray icon, start with Windows, hotkeys, optional second phone as camera "rng-lens 2"
 
 Background blur and auto-frame need the Microsoft Visual C++ Runtime (most PCs already have it):

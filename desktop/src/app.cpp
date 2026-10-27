@@ -4,6 +4,7 @@
 
 #include "app.h"
 #include "autoframe.h"
+#include "ui.h"
 
 #include <algorithm>
 #include <atomic>
@@ -22,6 +23,7 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 #include <commdlg.h>
+#include <dwmapi.h>
 #endif
 
 #include "imgui.h"
@@ -62,28 +64,6 @@ T jv(const json& j, const char* key, const T& def) {
     }
 }
 inline std::string jv(const json& j, const char* key, const char* def) { return jv<std::string>(j, key, std::string(def)); }
-
-const ImVec4 kAccent = ImVec4(1.00f, 0.38f, 0.25f, 1.00f);
-const ImVec4 kMuted = ImVec4(0.55f, 0.55f, 0.60f, 1.00f);
-const ImVec4 kGood = ImVec4(0.35f, 0.85f, 0.50f, 1.00f);
-const ImVec4 kWarn = ImVec4(1.00f, 0.78f, 0.30f, 1.00f);
-const ImVec4 kBad = ImVec4(1.00f, 0.40f, 0.40f, 1.00f);
-
-// Coloured text that wraps at the panel edge (long hints and errors).
-void wrapped(const ImVec4& c, const char* text) {
-    ImGui::PushStyleColor(ImGuiCol_Text, c);
-    ImGui::TextWrapped("%s", text);
-    ImGui::PopStyleColor();
-}
-
-bool radio(const char* label, std::string& v, const char* value) {
-    bool on = v == value;
-    if (ImGui::RadioButton(label, on) && !on) {
-        v = value;
-        return true;
-    }
-    return false;
-}
 
 std::string clock(int64_t ms) {
     int64_t s = ms / 1000;
@@ -282,6 +262,7 @@ struct Session {
                                 f.frameSpeed, crop);
     }
     AutoFrame autoFrame;
+    bool glassWanted = false; // the window is visible: keep the frosted copy for the UI fresh
     int64_t lastTick = 0;
 
     // One loop step. Returns the BGR frame for the vcam via the readback inside.
@@ -320,6 +301,7 @@ struct Session {
         bool pending = false;
         if (newFrame || changed || cropMoved || idleRefresh) {
             renderer.render(sp.outWidth, sp.outHeight, t, f, crop, newFrame);
+            if (glassWanted) renderer.updateGlass();
             lastT = t;
             lastOutW = sp.outWidth;
             lastOutH = sp.outHeight;
@@ -473,66 +455,37 @@ private:
         io.IniFilename = ini.c_str();
         float xs = 1.f, ys = 1.f;
         glfwGetWindowContentScale(win_, &xs, &ys);
-        loadFont(16.f * xs);
-        style(xs);
+        scale_ = xs;
+        ui::loadFonts(xs);
+        dark_ = ui::resolveDark(prefs_.theme);
+        ui::applyTheme(dark_, xs);
+        titleBarTheme();
+        glfwSetWindowSizeLimits(win_, (int)(980 * xs), (int)(620 * xs), GLFW_DONT_CARE, GLFW_DONT_CARE);
         ImGui_ImplGlfw_InitForOpenGL(win_, true);
         ImGui_ImplOpenGL3_Init("#version 330 core");
         return true;
     }
     static bool opt_dumpless(App* app) { return app->opt_.dumpOutput.empty(); }
 
-    void loadFont(float px) {
-        ImGuiIO& io = ImGui::GetIO();
-        const char* candidates[] = {
-            "C:\\Windows\\Fonts\\segoeui.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/TTF/DejaVuSans.ttf",
-        };
-        for (const char* f : candidates) {
-            if (plat::fileExists(f) && io.Fonts->AddFontFromFileTTF(f, px)) return;
-        }
-        ImFontConfig cfg;
-        cfg.SizePixels = px;
-        io.Fonts->AddFontDefault(&cfg);
+    // Windows 10/11 title bar in the same light/dark as the app.
+    void titleBarTheme() {
+#ifdef _WIN32
+        BOOL dark = dark_ ? TRUE : FALSE;
+        DwmSetWindowAttribute(glfwGetWin32Window(win_), 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+#endif
     }
 
-    void style(float scale) {
-        ImGui::StyleColorsDark();
-        ImGuiStyle& s = ImGui::GetStyle();
-        s.WindowRounding = 0.f;
-        s.FrameRounding = 6.f;
-        s.GrabRounding = 6.f;
-        s.ChildRounding = 8.f;
-        s.PopupRounding = 6.f;
-        s.TabRounding = 6.f;
-        s.FramePadding = ImVec2(10, 6);
-        s.ItemSpacing = ImVec2(10, 8);
-        s.WindowPadding = ImVec2(16, 16);
-        s.ScrollbarSize = 10.f;
-        ImVec4* c = s.Colors;
-        c[ImGuiCol_WindowBg] = ImVec4(0.055f, 0.055f, 0.07f, 1.f);
-        c[ImGuiCol_ChildBg] = ImVec4(0.085f, 0.085f, 0.105f, 1.f);
-        c[ImGuiCol_FrameBg] = ImVec4(0.14f, 0.14f, 0.17f, 1.f);
-        c[ImGuiCol_FrameBgHovered] = ImVec4(0.19f, 0.19f, 0.23f, 1.f);
-        c[ImGuiCol_FrameBgActive] = ImVec4(0.22f, 0.22f, 0.27f, 1.f);
-        c[ImGuiCol_Button] = ImVec4(0.16f, 0.16f, 0.20f, 1.f);
-        c[ImGuiCol_ButtonHovered] = ImVec4(0.24f, 0.24f, 0.29f, 1.f);
-        c[ImGuiCol_ButtonActive] = kAccent;
-        c[ImGuiCol_CheckMark] = kAccent;
-        c[ImGuiCol_SliderGrab] = kAccent;
-        c[ImGuiCol_SliderGrabActive] = ImVec4(1.f, 0.55f, 0.42f, 1.f);
-        c[ImGuiCol_Header] = ImVec4(0.18f, 0.18f, 0.22f, 1.f);
-        c[ImGuiCol_HeaderHovered] = ImVec4(0.24f, 0.24f, 0.29f, 1.f);
-        c[ImGuiCol_HeaderActive] = ImVec4(0.30f, 0.20f, 0.18f, 1.f);
-        c[ImGuiCol_Separator] = ImVec4(0.20f, 0.20f, 0.24f, 1.f);
-        c[ImGuiCol_Tab] = ImVec4(0.14f, 0.14f, 0.17f, 1.f);
-        c[ImGuiCol_TabHovered] = ImVec4(0.30f, 0.20f, 0.18f, 1.f);
-        c[ImGuiCol_TabSelected] = ImVec4(0.38f, 0.18f, 0.14f, 1.f);
-        c[ImGuiCol_PlotLines] = kAccent;
-        c[ImGuiCol_Text] = ImVec4(0.92f, 0.92f, 0.95f, 1.f);
-        c[ImGuiCol_TextDisabled] = kMuted;
-        c[ImGuiCol_PopupBg] = ImVec4(0.10f, 0.10f, 0.12f, 1.f);
-        s.ScaleAllSizes(scale);
+    // Follows the Windows theme while the app runs.
+    void syncTheme() {
+        int64_t now = nowMs();
+        if (now - lastThemeAt_ < 1500) return;
+        lastThemeAt_ = now;
+        bool d = ui::resolveDark(prefs_.theme);
+        if (d != dark_) {
+            dark_ = d;
+            ui::applyTheme(dark_, scale_);
+            titleBarTheme();
+        }
     }
 
     // ---------------------------------------------------------------- loop
@@ -545,6 +498,8 @@ private:
         for (int i = 0; i < active(); i++) sessions_[i]->tick(dump && i == 0, opt_.dumpOutput, quit_);
 
         bool visible = glfwGetWindowAttrib(win_, GLFW_VISIBLE) && !glfwGetWindowAttrib(win_, GLFW_ICONIFIED);
+        for (int i = 0; i < active(); i++) sessions_[i]->glassWanted = visible && i == tab_;
+        if (visible) syncTheme();
         if (visible) drawUi();
         for (int i = 0; i < active(); i++) sessions_[i]->deliver(dump && i == 0, opt_.dumpOutput, quit_);
         if (visible) glfwSwapBuffers(win_);
@@ -661,166 +616,400 @@ private:
 
     // ---------------------------------------------------------------- UI
 
+    enum Section { kPhone, kCamera, kEffects, kOutput, kSound, kSettings, kInfo, kSections };
+
     void drawUi() {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+        const ui::Palette& P = ui::P();
+        const float S = ui::S();
 
         const ImGuiViewport* vp = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(vp->WorkPos);
         ImGui::SetNextWindowSize(vp->WorkSize);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         ImGui::Begin("main", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                          ImGuiWindowFlags_NoBringToFrontOnFocus);
+        ImGui::PopStyleVar(2);
         if (tab_ >= active()) tab_ = 0;
         Session& s = *sessions_[tab_];
-        float panelW = 380.f * ImGui::GetStyle().FramePadding.x / 10.f;
-        float previewW = ImGui::GetContentRegionAvail().x - panelW - ImGui::GetStyle().ItemSpacing.x;
-        ImGui::BeginChild("preview", ImVec2(previewW, 0), ImGuiChildFlags_None,
-                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+        float sideW = 224.f * S, inspW = 372.f * S;
+        float h = ImGui::GetContentRegionAvail().y;
+
+        // Sidebar
+        ImVec2 o = ImGui::GetCursorScreenPos();
+        ImGui::GetWindowDrawList()->AddRectFilled(o, ImVec2(o.x + sideW, o.y + h), ui::col(P.sidebar));
+        ImGui::GetWindowDrawList()->AddLine(ImVec2(o.x + sideW - 0.5f, o.y), ImVec2(o.x + sideW - 0.5f, o.y + h), ui::col(P.separator));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12 * S, 14 * S));
+        ImGui::BeginChild("sidebar", ImVec2(sideW, h), ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar);
+        drawSidebar(s);
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::SameLine(0, 0);
+
+        // Preview
+        float prevW = ImGui::GetContentRegionAvail().x - inspW;
+        ImGui::BeginChild("preview", ImVec2(prevW, h), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         drawPreview(s);
         ImGui::EndChild();
-        ImGui::SameLine();
-        ImGui::BeginChild("panel", ImVec2(0, 0), ImGuiChildFlags_AlwaysUseWindowPadding);
-        drawPanel();
+        ImGui::SameLine(0, 0);
+
+        // Inspector
+        o = ImGui::GetCursorScreenPos();
+        ImGui::GetWindowDrawList()->AddLine(ImVec2(o.x, o.y), ImVec2(o.x, o.y + h), ui::col(P.separator));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18 * S, 18 * S));
+        ImGui::BeginChild("inspector", ImVec2(inspW, h), ImGuiChildFlags_AlwaysUseWindowPadding);
+        drawInspector(s);
         ImGui::EndChild();
+        ImGui::PopStyleVar();
         ImGui::End();
 
         ImGui::Render();
-        int w, h;
-        glfwGetFramebufferSize(win_, &w, &h);
-        glViewport(0, 0, w, h);
-        glClearColor(0.055f, 0.055f, 0.07f, 1.f);
+        int w, hh;
+        glfwGetFramebufferSize(win_, &w, &hh);
+        glViewport(0, 0, w, hh);
+        glClearColor(P.window.x, P.window.y, P.window.z, 1.f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }
 
+    // ---------------------------------------------------------------- sidebar
+
+    void drawSidebar(Session& s) {
+        const ui::Palette& P = ui::P();
+        const float S = ui::S();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 6 * S);
+        ui::title("rng-lens");
+        ImGui::SameLine();
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 6 * S);
+        ImGui::PushFont(ui::fonts().small);
+        ui::textSecondary(RNGLENS_VERSION);
+        ImGui::PopFont();
+        ImGui::Dummy(ImVec2(0, 10 * S));
+
+        if (prefs_.secondPhone) {
+            const char* labels[] = {"Phone 1", "Phone 2"};
+            ui::segmented("phones", labels, 2, &tab_, ImGui::GetContentRegionAvail().x);
+            ImGui::Dummy(ImVec2(0, 10 * S));
+        }
+
+        // Phone card
+        ImVec2 a = ImGui::GetCursorScreenPos();
+        float w = ImGui::GetContentRegionAvail().x;
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->ChannelsSplit(2);
+        dl->ChannelsSetCurrent(1);
+        ImGui::BeginGroup();
+        ImGui::Dummy(ImVec2(w, 10 * S));
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 12 * S);
+        ImGui::BeginGroup();
+        Connection::State st = s.conn.state();
+        bool live = st == Connection::State::Streaming;
+        std::string dev = s.device();
+        ImGui::PushFont(ui::fonts().strong);
+        ImGui::TextUnformatted(live ? (dev.empty() ? "Phone" : dev.c_str()) : "No phone");
+        ImGui::PopFont();
+        ImGui::PushFont(ui::fonts().small);
+        ImVec2 dotAt = ImGui::GetCursorScreenPos();
+        float dr = 3.5f * S;
+        ImVec4 dotCol = live ? P.good : st == Connection::State::Connecting ? P.warn : P.tertiary;
+        dl->AddCircleFilled(ImVec2(dotAt.x + dr, dotAt.y + ImGui::GetTextLineHeight() / 2), dr, ui::col(dotCol));
+        ImGui::SetCursorScreenPos(ImVec2(dotAt.x + dr * 2 + 6 * S, dotAt.y));
+        ui::textSecondary(live ? "Connected" : st == Connection::State::Connecting ? "Connecting..." : "Not connected");
+        if (live) {
+            int bat = jv(s.pstate, "battery", -1);
+            bool charging = jv(s.pstate, "charging", false);
+            double temp = jv(s.pstate, "tempC", 0.0);
+            json th = s.pstate.contains("thermal") ? s.pstate["thermal"] : json::object();
+            int level = jv(th, "level", 0);
+            char b[96];
+            if (bat >= 0) {
+                snprintf(b, sizeof(b), "%s %d%%", charging ? ui::icon::batteryCharging : bat < 20 ? ui::icon::batteryLow : ui::icon::battery, bat);
+                ui::text(b, bat < 15 && !charging ? P.bad : P.secondary);
+                ImGui::SameLine(0, 10 * S);
+            }
+            snprintf(b, sizeof(b), "%s %.0f\xc2\xb0" "C", ui::icon::thermometer, temp);
+            ui::text(b, level >= 3 || temp >= 45 ? P.bad : level >= 1 || temp >= 40 ? P.warn : P.secondary);
+            ImGui::SameLine(0, 10 * S);
+            ui::textSecondary(clock(nowMs() - s.streamStart).c_str());
+        }
+        ImGui::PopFont();
+        ImGui::EndGroup();
+        ImGui::Dummy(ImVec2(w, 10 * S));
+        ImGui::EndGroup();
+        ImVec2 b2 = ImGui::GetItemRectMax();
+        dl->ChannelsSetCurrent(0);
+        dl->AddRectFilled(a, ImVec2(a.x + w, b2.y), ui::col(P.group, P.dark ? 1.f : 0.85f), 10 * S);
+        dl->ChannelsMerge();
+        ImGui::Dummy(ImVec2(0, 14 * S));
+
+        struct Item {
+            Section id;
+            const char* icon;
+            const char* label;
+        };
+        const Item items[] = {
+            {kPhone, ui::icon::phone, "Phone"},       {kCamera, ui::icon::camera, "Camera"},
+            {kEffects, ui::icon::sparkles, "Effects"}, {kOutput, ui::icon::monitor, "Output"},
+            {kSound, ui::icon::mic, "Sound"},         {kSettings, ui::icon::settings, "Settings"},
+            {kInfo, ui::icon::activity, "Info"},
+        };
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2 * S));
+        for (const Item& it : items) {
+            const char* badge = nullptr;
+            if (it.id == kEffects && s.sp.filters.anyActive()) badge = "On";
+            if (it.id == kSound && prefs_.audio) badge = prefs_.muted ? "Muted" : "On";
+            if (ui::sidebarItem(it.icon, it.label, section_ == it.id, badge)) section_ = it.id;
+        }
+        ImGui::PopStyleVar();
+    }
+
+    // ---------------------------------------------------------------- preview
+
     void drawPreview(Session& s) {
-        ImVec2 avail = ImGui::GetContentRegionAvail();
+        const ui::Palette& P = ui::P();
+        const float S = ui::S();
         ImVec2 origin = ImGui::GetCursorScreenPos();
+        ImVec2 avail = ImGui::GetContentRegionAvail();
+        float m = 20 * S;
+        ImVec2 a(origin.x + m, origin.y + m), b(origin.x + avail.x - m, origin.y + avail.y - m);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        float r = 14 * S;
+        dl->AddRectFilled(a, b, ui::col(P.preview), r);
+
+        bool live = s.streaming() && s.renderer.hasFrame();
+        ImVec2 pa = a, pb = b;
         float ow = (float)s.renderer.outputWidth(), oh = (float)s.renderer.outputHeight();
-        if (ow > 0 && oh > 0) {
-            float sc = std::min(avail.x / ow, avail.y / oh);
+        if (live && ow > 0 && oh > 0) {
+            float sc = std::min((b.x - a.x) / ow, (b.y - a.y) / oh);
             ImVec2 size(ow * sc, oh * sc);
-            ImGui::SetCursorScreenPos(ImVec2(origin.x + (avail.x - size.x) / 2, origin.y + (avail.y - size.y) / 2));
-            ImGui::Image((ImTextureID)(intptr_t)s.renderer.outputTexture(), size);
+            pa = ImVec2(a.x + (b.x - a.x - size.x) / 2, a.y + (b.y - a.y - size.y) / 2);
+            pb = ImVec2(pa.x + size.x, pa.y + size.y);
+            dl->AddImageRounded((ImTextureID)(intptr_t)s.renderer.outputTexture(), pa, pb, ImVec2(0, 0), ImVec2(1, 1),
+                                IM_COL32_WHITE, r);
+        } else {
+            drawEmptyState(s, a, b);
         }
-        if (!s.streaming() || !s.renderer.hasFrame()) {
-            const char* lines[] = {
-                "Open rng-lens on your phone.",
-                "Same Wi-Fi: it shows up on the right, click it.",
-                "USB: enable USB debugging, plug in, press USB.",
-            };
-            float y = origin.y + avail.y / 2 - 50;
-            for (const char* l : lines) {
-                ImVec2 ts = ImGui::CalcTextSize(l);
-                ImGui::SetCursorScreenPos(ImVec2(origin.x + (avail.x - ts.x) / 2, y));
-                ImGui::TextColored(kMuted, "%s", l);
-                y += ts.y + 10;
-            }
-        }
-    }
+        if (!live) return;
 
-    void drawPanel() {
-        ImGui::PushStyleColor(ImGuiCol_Text, kAccent);
-        ImGui::SetWindowFontScale(1.5f);
-        ImGui::TextUnformatted("rng-lens");
-        ImGui::SetWindowFontScale(1.f);
-        ImGui::PopStyleColor();
+        // Top-left: what the camera is doing.
+        char info[96];
+        bool watched = s.vcam && s.vcam->running() && s.vcam->watched();
+        snprintf(info, sizeof(info), "%s  %dx%d  %.0f fps", watched ? "LIVE" : "PREVIEW", s.sp.outWidth, s.sp.outHeight, s.fpsShown);
+        ImFont* sf = ui::fonts().small;
+        ImVec2 ts = sf->CalcTextSizeA(sf->FontSize, FLT_MAX, 0, info);
+        ImVec2 ia(pa.x + 14 * S, pa.y + 14 * S), ib(ia.x + ts.x + 30 * S, ia.y + ts.y + 12 * S);
+        ui::glassPanel(dl, ia, ib, s.renderer.glassTexture(), pa, pb, (ib.y - ia.y) / 2);
+        float dr = 3.5f * S;
+        dl->AddCircleFilled(ImVec2(ia.x + 12 * S, (ia.y + ib.y) / 2), dr, ui::col(watched ? P.bad : P.tertiary));
+        dl->AddText(sf, sf->FontSize, ImVec2(ia.x + 20 * S, ia.y + 6 * S), ui::col(P.dark ? P.label : ImVec4(0.1f, 0.1f, 0.11f, 1)), info);
+
+        // Bottom: the glass toolbar with the things people toggle mid-call.
+        FilterPrefs& f = s.sp.filters;
+        bool torch = jv(s.cam, "flash", false);
+        int n = 5 + (torch ? 1 : 0);
+        float bs = 38 * S, gap = 6 * S, padx = 8 * S;
+        float tw = n * bs + (n - 1) * gap + 2 * padx, th = bs + 2 * 7 * S;
+        ImVec2 ta((pa.x + pb.x - tw) / 2, pb.y - th - 16 * S), tb(ta.x + tw, ta.y + th);
+        ui::glassPanel(dl, ta, tb, s.renderer.glassTexture(), pa, pb, th / 2);
+        ImGui::SetCursorScreenPos(ImVec2(ta.x + padx, ta.y + 7 * S));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(gap, 0));
+        bool ch = false;
+        if (ui::glassButton(ui::icon::focus, "Background blur", f.background == "blur", bs)) {
+            f.background = f.background == "blur" ? "off" : "blur";
+            ch = true;
+        }
         ImGui::SameLine();
-        ImGui::TextColored(kMuted, " v" RNGLENS_VERSION);
-
-        if (prefs_.secondPhone && ImGui::BeginTabBar("phones")) {
-            for (int i = 0; i < 2; i++) {
-                std::string label = (i == 0 ? "Phone 1" : "Phone 2") + std::string(sessions_[i]->streaming() ? "  *" : "") +
-                                    "###tab" + std::to_string(i);
-                if (ImGui::BeginTabItem(label.c_str())) {
-                    tab_ = i;
-                    ImGui::EndTabItem();
-                }
+        if (ui::glassButton(ui::icon::scanFace, "Auto-frame", f.autoFrame, bs)) {
+            f.autoFrame = !f.autoFrame;
+            ch = true;
+        }
+        ImGui::SameLine();
+        if (ui::glassButton(ui::icon::mirror, "Mirror", s.sp.mirror, bs)) {
+            s.sp.mirror = !s.sp.mirror;
+            ch = true;
+        }
+        ImGui::SameLine();
+        if (ui::glassButton(ui::icon::rotate, "Rotate 90\xc2\xb0", false, bs)) {
+            s.sp.extraTurns = (s.sp.extraTurns + 1) & 3;
+            ch = true;
+        }
+        ImGui::SameLine();
+        bool micOn = prefs_.audio && !prefs_.muted;
+        if (ui::glassButton(micOn ? ui::icon::mic : ui::icon::micOff, micOn ? "Phone mic on" : "Phone mic off", micOn, bs)) {
+            if (!prefs_.audio) {
+                prefs_.audio = true;
+                prefs_.muted = false;
+                sendMic();
+            } else {
+                prefs_.muted = !prefs_.muted;
             }
-            ImGui::EndTabBar();
+            audio_.setMuted(prefs_.muted);
+            prefs_.save();
         }
-        Session& s = *sessions_[tab_];
-
-        drawConnection(s);
-        if (s.streaming() && !s.hello.empty()) {
-            drawCamera(s);
-            drawPicture(s);
-        }
-        drawEffects(s);
-        drawOutput(s);
-        drawAudio();
-        drawSettings();
-        drawStats(s);
-    }
-
-    // Battery, temperature, heat guard and stream time, right under the phone's name.
-    void drawPhoneStatus(Session& s) {
-        int bat = jv(s.pstate, "battery", -1);
-        bool charging = jv(s.pstate, "charging", false);
-        double temp = jv(s.pstate, "tempC", 0.0);
-        json th = s.pstate.contains("thermal") ? s.pstate["thermal"] : json::object();
-        int level = jv(th, "level", 0);
-        if (bat >= 0) {
-            ImVec4 bc = bat < 15 && !charging ? kBad : bat < 30 && !charging ? kWarn : kGood;
-            ImGui::TextColored(bc, "Battery %d%%%s", bat, charging ? " (charging)" : "");
+        if (torch) {
             ImGui::SameLine();
+            if (ui::glassButton(ui::icon::torch, "Torch", s.ui.torch, bs)) {
+                s.ui.torch = !s.ui.torch;
+                s.conn.sendControl({{"torch", s.ui.torch}});
+            }
         }
-        ImVec4 tc = level >= 3 || temp >= 45 ? kBad : level >= 1 || temp >= 40 ? kWarn : ImVec4(0.92f, 0.92f, 0.95f, 1.f);
-        ImGui::TextColored(tc, "  %.0f C", temp);
-        ImGui::SameLine();
-        ImGui::TextColored(kMuted, "  %s", clock(nowMs() - s.streamStart).c_str());
-        if (jv(th, "throttled", false)) {
-            std::string m = "Phone is hot: lowered to " + jv(th, "limit", std::string("less")) +
-                            " so it doesn't overheat. Full quality comes back when it cools.";
-            wrapped(kWarn, m.c_str());
-        } else if (level == 1) {
-            wrapped(kMuted, "Phone is warming up. Locking its screen and taking it off the charger helps.");
+        ImGui::PopStyleVar();
+        if (ch) {
+            s.dirty = true;
+            prefs_.save();
         }
-        if (bat >= 0 && bat < 15 && !charging) wrapped(kBad, "Phone battery is low: plug it in.");
     }
 
-    void drawConnection(Session& s) {
-        ImGui::SeparatorText("Phone");
+    void drawEmptyState(Session& s, ImVec2 a, ImVec2 b) {
+        const float S = ui::S();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec4 fg(0.92f, 0.92f, 0.96f, 1.f), fg2(0.92f, 0.92f, 0.96f, 0.55f); // the preview well is always dark
+        ImFont* icf = ui::fonts().icons;
+        float isz = icf->FontSize * 2.6f;
+        const char* ic = ui::icon::phone;
+        ImVec2 isize = icf->CalcTextSizeA(isz, FLT_MAX, 0, ic);
+        float cx = (a.x + b.x) / 2, y = (a.y + b.y) / 2 - 90 * S;
+        dl->AddText(icf, isz, ImVec2(cx - isize.x / 2, y), ui::col(ui::P().accent), ic);
+        y += isize.y + 16 * S;
+        bool connecting = s.conn.state() == Connection::State::Connecting;
+        const char* head = connecting ? "Connecting to your phone..." : "Connect your phone";
+        ImFont* tf = ui::fonts().title;
+        ImVec2 hs = tf->CalcTextSizeA(tf->FontSize, FLT_MAX, 0, head);
+        dl->AddText(tf, tf->FontSize, ImVec2(cx - hs.x / 2, y), ui::col(fg), head);
+        y += hs.y + 12 * S;
+        const char* lines[] = {"Open rng-lens on the phone, on the same Wi-Fi.",
+                               "It shows up under Phone. Or plug in USB with USB debugging on."};
+        ImFont* bf = ui::fonts().body;
+        for (const char* l : lines) {
+            ImVec2 ls = bf->CalcTextSizeA(bf->FontSize, FLT_MAX, 0, l);
+            dl->AddText(bf, bf->FontSize, ImVec2(cx - ls.x / 2, y), ui::col(fg2), l);
+            y += ls.y + 6 * S;
+        }
+    }
+
+    // ---------------------------------------------------------------- inspector
+
+    void drawInspector(Session& s) {
+        static const char* titles[] = {"Phone", "Camera", "Effects", "Output", "Sound", "Settings", "Info"};
+        ui::title(titles[section_]);
+        ImGui::Dummy(ImVec2(0, 10 * ui::S()));
+        switch (section_) {
+        case kPhone: drawPhone(s); break;
+        case kCamera: drawCamera(s); break;
+        case kEffects: drawEffects(s); break;
+        case kOutput: drawOutput(s); break;
+        case kSound: drawAudio(); break;
+        case kSettings: drawSettings(); break;
+        case kInfo: drawInfo(s); break;
+        default: break;
+        }
+    }
+
+    void drawPhone(Session& s) {
+        const ui::Palette& P = ui::P();
         Connection::State st = s.conn.state();
         if (st == Connection::State::Streaming || st == Connection::State::Connecting) {
+            bool live = st == Connection::State::Streaming;
             std::string dev = s.device();
-            ImGui::TextColored(st == Connection::State::Streaming ? kGood : kMuted, "%s %s",
-                               st == Connection::State::Streaming ? "Connected:" : "Connecting to",
-                               dev.empty() ? s.conn.peer().c_str() : dev.c_str());
-            if (st == Connection::State::Streaming) drawPhoneStatus(s);
-            if (ImGui::Button("Disconnect", ImVec2(-1, 0))) {
+            ui::beginGroup(live ? "Connected" : "Connecting");
+            ui::row("Phone");
+            ui::value(dev.empty() ? s.conn.peer().c_str() : dev.c_str(), P.secondary);
+            ui::rowEnd();
+            ui::row("Address");
+            ui::value(s.conn.peer().c_str(), P.secondary);
+            ui::rowEnd();
+            if (live) {
+                int bat = jv(s.pstate, "battery", -1);
+                bool charging = jv(s.pstate, "charging", false);
+                double temp = jv(s.pstate, "tempC", 0.0);
+                json th = s.pstate.contains("thermal") ? s.pstate["thermal"] : json::object();
+                int level = jv(th, "level", 0);
+                char b[64];
+                if (bat >= 0) {
+                    ui::row("Battery");
+                    snprintf(b, sizeof(b), "%d%%%s", bat, charging ? ", charging" : "");
+                    ui::value(b, bat < 15 && !charging ? P.bad : P.secondary);
+                    ui::rowEnd();
+                }
+                ui::row("Temperature");
+                snprintf(b, sizeof(b), "%.0f\xc2\xb0" "C%s", temp, level >= 3 ? ", hot" : level >= 1 ? ", warm" : "");
+                ui::value(b, level >= 3 || temp >= 45 ? P.bad : level >= 1 || temp >= 40 ? P.warn : P.secondary);
+                ui::rowEnd();
+                ui::row("Streaming for");
+                ui::value(clock(nowMs() - s.streamStart).c_str(), P.secondary);
+                ui::rowEnd();
+                std::string note;
+                ImVec4 nc = P.secondary;
+                if (jv(th, "throttled", false)) {
+                    note = "The phone is hot, so it lowered to " + jv(th, "limit", std::string("less")) +
+                           ". Full quality comes back when it cools.";
+                    nc = P.warn;
+                } else if (level == 1) {
+                    note = "The phone is warming up. Locking its screen and taking it off the charger helps.";
+                }
+                if (bat >= 0 && bat < 15 && !charging) {
+                    note = "The phone battery is low: plug it in.";
+                    nc = P.bad;
+                }
+                if (!note.empty()) {
+                    ui::rowBlock();
+                    ui::caption(note.c_str(), nc);
+                    ui::rowEnd();
+                }
+            }
+            ui::endGroup();
+            if (ui::button("Disconnect", false, ImGui::GetContentRegionAvail().x)) {
                 s.userIdle = true;
                 s.conn.disconnect();
             }
             return;
         }
-        if (st == Connection::State::Failed) wrapped(kBad, s.conn.error().c_str());
 
         std::vector<Discovery::Phone> phones = disc_.phones();
         const Session& other = *sessions_[1 - s.index];
-        if (phones.empty()) {
-            ImGui::TextColored(kMuted, disc_.listening() ? "Looking for phones on Wi-Fi..." : "Wi-Fi discovery is blocked (port 38441).");
-        }
+        ui::beginGroup("Phones on this Wi-Fi");
+        int shown = 0;
         for (const Discovery::Phone& p : phones) {
             if (active() == 2 && other.streaming() && other.conn.peer() == p.ip) continue; // already on the other tab
-            std::string label = p.name + "   " + p.ip;
-            if (ImGui::Button(label.c_str(), ImVec2(-1, 0))) s.connectTo(p.ip, p.port);
+            ImGui::PushID(p.ip.c_str());
+            ui::row(p.name.c_str(), 96 * ui::S());
+            if (ui::button("Connect", true, -1)) s.connectTo(p.ip, p.port);
+            ui::rowEnd();
+            ImGui::PopID();
+            shown++;
         }
+        if (!shown) {
+            ui::rowBlock();
+            ui::caption(disc_.listening() ? "Looking for phones... Open rng-lens on the phone."
+                                          : "Wi-Fi discovery is blocked (port 38441). Connect by address below.",
+                        P.secondary);
+            ui::rowEnd();
+        }
+        ui::endGroup(st == Connection::State::Failed ? s.conn.error().c_str() : nullptr);
+
+        ui::beginGroup("Other ways");
         if (s.index == 0) {
-            if (ImGui::Button("USB", ImVec2(80, 0))) {
+            ui::row("USB cable", 96 * ui::S());
+            if (ui::button("Connect##usb", false, -1)) {
                 s.usbMsg.clear();
                 if (adbForward(s.usbMsg)) s.connectTo("127.0.0.1", proto::kPort);
             }
-            ImGui::SameLine();
+            ui::rowEnd();
         }
-        ImGui::SetNextItemWidth(-80);
-        ImGui::InputTextWithHint("##ip", "phone IP", s.ipBuf, sizeof(s.ipBuf));
+        ui::rowBlock();
+        float w = ImGui::CalcItemWidth();
+        ImGui::SetNextItemWidth(w - 96 * ui::S() - 8 * ui::S());
+        ImGui::InputTextWithHint("##ip", "Phone address, e.g. 192.168.1.20", s.ipBuf, sizeof(s.ipBuf));
         ImGui::SameLine();
-        if (ImGui::Button("Connect", ImVec2(-1, 0)) && s.ipBuf[0]) s.connectTo(s.ipBuf, proto::kPort);
-        if (!s.usbMsg.empty()) ImGui::TextWrapped("%s", s.usbMsg.c_str());
-        if (ImGui::Checkbox("Reconnect automatically", &s.sp.autoConnect)) prefs_.save();
+        if (ui::button("Connect##ip", false, 96 * ui::S()) && s.ipBuf[0]) s.connectTo(s.ipBuf, proto::kPort);
+        ui::rowEnd();
+        if (toggleRow("Reconnect automatically", &s.sp.autoConnect)) prefs_.save();
+        ui::endGroup(s.usbMsg.empty() ? nullptr : s.usbMsg.c_str());
     }
 
     static std::string cameraLabel(const json& c) {
@@ -828,39 +1017,62 @@ private:
         facing[0] = (char)toupper(facing[0]);
         char buf[96];
         double focal = jv(c, "focal", 0.0);
-        if (focal > 0) snprintf(buf, sizeof(buf), "%s  %.1f mm  (#%s)", facing.c_str(), focal, jv(c, "id", std::string()).c_str());
-        else snprintf(buf, sizeof(buf), "%s  (#%s)", facing.c_str(), jv(c, "id", std::string()).c_str());
+        if (focal > 0) snprintf(buf, sizeof(buf), "%s %.1f mm", facing.c_str(), focal);
+        else snprintf(buf, sizeof(buf), "%s (#%s)", facing.c_str(), jv(c, "id", std::string()).c_str());
         return buf;
     }
 
+    // Row with a switch on the right.
+    bool toggleRow(const char* label, bool* v) {
+        const float S = ui::S();
+        ui::row(label, 36 * S);
+        bool r = ui::toggle(label, v);
+        ui::rowEnd();
+        return r;
+    }
+
+    void needPhone(const char* what) {
+        ui::beginGroup();
+        ui::rowBlock();
+        ui::caption(what, ui::P().secondary);
+        ui::rowEnd();
+        ui::endGroup();
+    }
+
     void drawCamera(Session& s) {
-        ImGui::SeparatorText("Camera");
-        if (!s.hello.contains("cameras")) return;
+        if (!s.streaming() || s.hello.empty() || !s.hello.contains("cameras")) {
+            needPhone("Connect a phone to pick its lens, resolution, zoom and focus.");
+            return;
+        }
         const json& cams = s.hello["cameras"];
+        ui::beginGroup("Lens and quality");
+        ui::row("Lens");
         std::string cur = !s.cam.empty() ? cameraLabel(s.cam) : s.ui.camera;
-        ImGui::SetNextItemWidth(-1);
-        if (ImGui::BeginCombo("##lens", cur.c_str())) {
+        if (ui::beginPopupButton("##lens", cur.c_str())) {
             for (const json& c : cams) {
                 std::string id = jv(c, "id", std::string());
-                if (ImGui::Selectable(cameraLabel(c).c_str(), id == s.ui.camera) && id != s.ui.camera) {
+                if (ui::option((cameraLabel(c) + "##" + id).c_str(), id == s.ui.camera) && id != s.ui.camera) {
                     s.ui.camera = id;
                     s.control({{"camera", id}});
                 }
             }
             ImGui::EndCombo();
         }
-        if (s.cam.empty()) return;
-
+        ui::rowEnd();
+        if (s.cam.empty()) {
+            ui::endGroup();
+            return;
+        }
         int maxFpsForSize = 30;
         char cur2[64];
         snprintf(cur2, sizeof(cur2), "%d x %d", s.ui.width, s.ui.height);
-        ImGui::SetNextItemWidth(-1);
-        if (ImGui::BeginCombo("##size", cur2)) {
+        ui::row("Resolution");
+        if (ui::beginPopupButton("##size", cur2)) {
             for (const json& z : s.cam["sizes"]) {
                 int w = z[0], h = z[1], mf = z[2];
                 char lbl[64];
-                snprintf(lbl, sizeof(lbl), "%d x %d   (up to %d fps)", w, h, mf);
-                if (ImGui::Selectable(lbl, w == s.ui.width && h == s.ui.height)) {
+                snprintf(lbl, sizeof(lbl), "%d x %d  \xc2\xb7  %d fps", w, h, mf);
+                if (ui::option(lbl, w == s.ui.width && h == s.ui.height)) {
                     s.ui.width = w;
                     s.ui.height = h;
                     s.control({{"width", w}, {"height", h}});
@@ -868,133 +1080,134 @@ private:
             }
             ImGui::EndCombo();
         }
+        ui::rowEnd();
         for (const json& z : s.cam["sizes"])
             if ((int)z[0] == s.ui.width && (int)z[1] == s.ui.height) maxFpsForSize = z[2];
-
-        ImGui::TextColored(kMuted, "FPS");
-        for (int f : {15, 24, 30, 60}) {
-            if (f > maxFpsForSize && f != s.ui.fps) continue;
-            ImGui::SameLine();
-            char lbl[8];
-            snprintf(lbl, sizeof(lbl), "%d", f);
-            if (ImGui::RadioButton(lbl, s.ui.fps == f) && s.ui.fps != f) {
-                s.ui.fps = f;
-                s.control({{"fps", f}});
-            }
+        std::vector<int> fpsList;
+        for (int f : {15, 24, 30, 60})
+            if (f <= maxFpsForSize || f == s.ui.fps) fpsList.push_back(f);
+        std::vector<std::string> fpsLbl;
+        for (int f : fpsList) fpsLbl.push_back(std::to_string(f));
+        std::vector<const char*> fpsPtr;
+        for (auto& l : fpsLbl) fpsPtr.push_back(l.c_str());
+        int fsel = 0;
+        for (size_t i = 0; i < fpsList.size(); i++)
+            if (fpsList[i] == s.ui.fps) fsel = (int)i;
+        ui::row("Frame rate");
+        if (ui::segmented("fps", fpsPtr.data(), (int)fpsPtr.size(), &fsel)) {
+            s.ui.fps = fpsList[fsel];
+            s.control({{"fps", s.ui.fps}});
         }
+        ui::rowEnd();
         if (jv(s.hello, "hevc", false)) {
-            ImGui::TextColored(kMuted, "Codec");
-            ImGui::SameLine();
-            if (ImGui::RadioButton("H.264", s.ui.codec == 0) && s.ui.codec != 0) {
-                s.ui.codec = 0;
-                s.control({{"codec", 0}});
-            }
-            ImGui::SameLine();
-            if (ImGui::RadioButton("HEVC", s.ui.codec == 1) && s.ui.codec != 1) {
-                s.ui.codec = 1;
-                s.control({{"codec", 1}});
-            }
+            const char* codecs[] = {"H.264", "HEVC"};
+            ui::row("Codec");
+            if (ui::segmented("codec", codecs, 2, &s.ui.codec)) s.control({{"codec", s.ui.codec}});
+            ui::rowEnd();
         }
         bool autoRate = s.ui.bitrate == 0;
-        if (ImGui::Checkbox("Auto bitrate", &autoRate)) {
+        if (toggleRow("Automatic bitrate", &autoRate)) {
             s.ui.bitrate = autoRate ? 0 : jv(s.pstate, "streamBitrate", 8000000);
             s.control({{"bitrate", s.ui.bitrate}});
         }
         if (!autoRate) {
             float mb = s.ui.bitrate / 1e6f;
-            ImGui::SetNextItemWidth(-1);
-            if (ImGui::SliderFloat("##br", &mb, 1.f, 60.f, "%.0f Mbit/s")) s.ui.bitrate = (int)(mb * 1e6f);
+            ui::row("Bitrate");
+            if (ui::slider("##br", &mb, 1.f, 60.f, "%.0f Mbit/s")) s.ui.bitrate = (int)(mb * 1e6f);
             if (ImGui::IsItemDeactivatedAfterEdit()) s.control({{"bitrate", s.ui.bitrate}});
+            ui::rowEnd();
         }
-    }
+        ui::endGroup();
 
-    void drawPicture(Session& s) {
-        if (s.cam.empty()) return;
-        ImGui::SeparatorText("Picture");
-        PhoneUi& ui = s.ui;
+        PhoneUi& ui_ = s.ui;
+        ui::beginGroup("Picture");
         json z = jv(s.cam, "zoom", json::array({1.0, 1.0}));
         float zmin = z[0], zmax = z[1];
         if (zmax > zmin + 0.01f) {
-            ImGui::TextColored(kMuted, "Zoom");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(-1);
-            if (ImGui::SliderFloat("##zoom", &ui.zoom, zmin, std::min(zmax, 30.f), "%.1fx", ImGuiSliderFlags_Logarithmic))
-                s.conn.sendControl({{"zoom", ui.zoom}});
+            ui::row("Zoom");
+            if (ui::slider("##zoom", &ui_.zoom, zmin, std::min(zmax, 30.f), "%.1fx", true)) s.conn.sendControl({{"zoom", ui_.zoom}});
+            ui::rowEnd();
+            std::vector<float> presets;
+            std::vector<std::string> pl;
             if (zmin < 0.99f) {
-                if (ImGui::SmallButton("Wide")) {
-                    ui.zoom = zmin;
-                    s.conn.sendControl({{"zoom", ui.zoom}});
-                }
-                ImGui::SameLine();
+                presets.push_back(zmin);
+                pl.push_back("Wide");
             }
-            for (float preset : {1.f, 2.f, 5.f}) {
-                if (preset > zmax) continue;
-                char lbl[8];
-                snprintf(lbl, sizeof(lbl), "%gx", preset);
-                if (ImGui::SmallButton(lbl)) {
-                    ui.zoom = preset;
-                    s.conn.sendControl({{"zoom", ui.zoom}});
+            for (float p : {1.f, 2.f, 5.f})
+                if (p <= zmax) {
+                    presets.push_back(p);
+                    char lb[8];
+                    snprintf(lb, sizeof(lb), "%gx", p);
+                    pl.push_back(lb);
                 }
-                ImGui::SameLine();
+            std::vector<const char*> pp;
+            for (auto& l : pl) pp.push_back(l.c_str());
+            int zsel = -1;
+            for (size_t i = 0; i < presets.size(); i++)
+                if (std::fabs(presets[i] - ui_.zoom) < 0.02f) zsel = (int)i;
+            int before = zsel;
+            ui::row("");
+            if (ui::segmented("zoompre", pp.data(), (int)pp.size(), &zsel) || (zsel != before && zsel >= 0)) {
+                ui_.zoom = presets[zsel];
+                s.conn.sendControl({{"zoom", ui_.zoom}});
             }
-            ImGui::NewLine();
+            ui::rowEnd();
         }
-        ImGui::TextColored(kMuted, "Focus");
-        ImGui::SameLine();
-        bool fc = false;
-        fc |= radio("Auto##af", ui.af, "auto");
-        ImGui::SameLine();
-        fc |= radio("Lock##af", ui.af, "lock");
-        if (jv(s.cam, "afManual", false)) {
-            ImGui::SameLine();
-            fc |= radio("Manual##af", ui.af, "manual");
+        std::vector<const char*> afl = {"Auto", "Lock"};
+        bool manualOk = jv(s.cam, "afManual", false);
+        if (manualOk) afl.push_back("Manual");
+        int afSel = ui_.af == "lock" ? 1 : ui_.af == "manual" && manualOk ? 2 : 0;
+        ui::row("Focus");
+        if (ui::segmented("af", afl.data(), (int)afl.size(), &afSel)) {
+            ui_.af = afSel == 1 ? "lock" : afSel == 2 ? "manual" : "auto";
+            s.conn.sendControl({{"af", ui_.af}});
         }
-        if (fc) s.conn.sendControl({{"af", ui.af}});
-        if (ui.af == "manual") {
-            ImGui::SetNextItemWidth(-1);
-            if (ImGui::SliderFloat("##focus", &ui.focus, 0.f, 1.f, ui.focus < 0.02f ? "far" : "%.2f"))
-                s.conn.sendControl({{"focus", ui.focus}});
+        ui::rowEnd();
+        if (ui_.af == "manual") {
+            ui::row("Distance");
+            if (ui::slider("##focus", &ui_.focus, 0.f, 1.f, ui_.focus < 0.02f ? "far" : "%.2f")) s.conn.sendControl({{"focus", ui_.focus}});
+            ui::rowEnd();
         }
         json evr = jv(s.cam, "ev", json::array({0, 0, 1.0}));
         int evMin = evr[0], evMax = evr[1];
         float evStep = evr[2];
         if (evMax > evMin) {
-            ImGui::TextColored(kMuted, "Exposure");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(-1);
             char fmt[32];
-            snprintf(fmt, sizeof(fmt), "%+.1f EV", ui.ev * evStep);
-            if (ImGui::SliderInt("##ev", &ui.ev, evMin, evMax, fmt)) s.conn.sendControl({{"ev", ui.ev}});
+            snprintf(fmt, sizeof(fmt), "%+.1f EV", ui_.ev * evStep);
+            ui::row("Exposure");
+            if (ui::sliderInt("##ev", &ui_.ev, evMin, evMax, fmt)) s.conn.sendControl({{"ev", ui_.ev}});
+            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                ui_.ev = 0;
+                s.conn.sendControl({{"ev", 0}});
+            }
+            ui::rowEnd();
         }
-        bool aeLock = ui.ae == "lock", wbLock = ui.awb == "lock";
-        if (ImGui::Checkbox("Lock exposure", &aeLock)) {
-            ui.ae = aeLock ? "lock" : "auto";
-            s.conn.sendControl({{"ae", ui.ae}});
+        bool aeLock = ui_.ae == "lock", wbLock = ui_.awb == "lock";
+        if (toggleRow("Lock exposure", &aeLock)) {
+            ui_.ae = aeLock ? "lock" : "auto";
+            s.conn.sendControl({{"ae", ui_.ae}});
         }
-        ImGui::SameLine();
-        if (ImGui::Checkbox("Lock white balance", &wbLock)) {
-            ui.awb = wbLock ? "lock" : "auto";
-            s.conn.sendControl({{"awb", ui.awb}});
+        if (toggleRow("Lock white balance", &wbLock)) {
+            ui_.awb = wbLock ? "lock" : "auto";
+            s.conn.sendControl({{"awb", ui_.awb}});
         }
-        if (jv(s.cam, "flash", false) && ImGui::Checkbox("Torch", &ui.torch)) s.conn.sendControl({{"torch", ui.torch}});
-        if (jv(s.cam, "stab", false)) {
-            if (jv(s.cam, "flash", false)) ImGui::SameLine();
-            if (ImGui::Checkbox("Stabilization", &ui.stab)) s.conn.sendControl({{"stab", ui.stab}});
-        }
+        if (jv(s.cam, "flash", false) && toggleRow("Torch", &ui_.torch)) s.conn.sendControl({{"torch", ui_.torch}});
+        if (jv(s.cam, "stab", false) && toggleRow("Stabilization", &ui_.stab)) s.conn.sendControl({{"stab", ui_.stab}});
+        ui::endGroup();
     }
 
-    bool slider(const char* label, float* v, float lo, float hi, const char* fmt = "%.2f") {
-        ImGui::TextColored(kMuted, "%s", label);
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x * 0.36f);
-        ImGui::SetNextItemWidth(-1);
+    // Effect slider row; double-click resets.
+    bool fx(const char* label, float* v, float lo, float hi, const char* fmt = "%.2f") {
+        ui::row(label);
         std::string id = std::string("##") + label;
-        bool changed = ImGui::SliderFloat(id.c_str(), v, lo, hi, fmt);
+        bool changed = ui::slider(id.c_str(), v, lo, hi, fmt);
         if (ImGui::IsItemDeactivatedAfterEdit()) prefs_.save();
-        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) { // double-click: back to neutral
-            *v = lo < 0 ? 0.f : (std::string(label) == "Look strength" ? 1.f : 0.f);
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+            *v = lo < 0 ? 0.f : (std::string(label) == "Strength" ? 1.f : 0.f);
             changed = true;
             prefs_.save();
         }
+        ui::rowEnd();
         return changed;
     }
 
@@ -1020,20 +1233,57 @@ private:
     }
 
     void drawEffects(Session& s) {
-        ImGui::SeparatorText("Effects");
+        const ui::Palette& P = ui::P();
         FilterPrefs& f = s.sp.filters;
         bool ch = false;
 
-        // Look
+        ui::beginGroup("Background");
+        int bg = f.background == "blur" ? 1 : f.background == "image" ? 2 : 0;
+        const char* bgl[] = {"Off", "Blur", "Picture"};
+        ui::row("Background");
+        if (ui::segmented("bg", bgl, 3, &bg)) {
+            f.background = bg == 1 ? "blur" : bg == 2 ? "image" : "off";
+            ch = true;
+            if (f.background == "image" && f.backgroundImage.empty()) pickImage(f.backgroundImage);
+            if (f.background == "image") s.renderer.setBackgroundImage(f.backgroundImage);
+            prefs_.save();
+        }
+        ui::rowEnd();
+        if (f.background == "blur") ch |= fx("Amount", &f.blur, 0.f, 1.f);
+        if (f.background == "image") {
+            std::string name = f.backgroundImage.empty() ? std::string("Choose...") : f.backgroundImage;
+            size_t slash = name.find_last_of("\\/");
+            if (slash != std::string::npos) name = name.substr(slash + 1);
+            ui::row("Picture");
+            if (ui::button((name + "##pic").c_str(), false, -1) && pickImage(f.backgroundImage)) {
+                if (!s.renderer.setBackgroundImage(f.backgroundImage)) s.visionWhy = "Couldn't open that picture";
+                ch = true;
+                prefs_.save();
+            }
+            ui::rowEnd();
+        }
+        if (toggleRow("Auto-frame", &f.autoFrame)) {
+            ch = true;
+            prefs_.save();
+        }
+        if (f.autoFrame) {
+            ch |= fx("Framing", &f.frameTightness, 0.f, 1.f, f.frameTightness < 0.35f ? "wide" : f.frameTightness > 0.7f ? "close" : "medium");
+            ch |= fx("Follow speed", &f.frameSpeed, 0.f, 1.f, f.frameSpeed < 0.35f ? "slow" : f.frameSpeed > 0.7f ? "fast" : "normal");
+        }
+        std::string foot;
+        if ((f.background != "off" || f.autoFrame) && s.vision.failed()) foot = s.vision.error();
+        else if ((f.background != "off" || f.autoFrame) && !s.vision.ready()) foot = "Loading the background and face models...";
+        if (!s.visionWhy.empty()) foot = s.visionWhy;
+        ui::endGroup(foot.empty() ? "Auto-frame keeps your face in the shot and follows you when you move." : foot.c_str());
+
+        ui::beginGroup("Look");
         const char* cur = "None";
         for (const Look& l : kLooks)
             if (f.look == l.id) cur = l.label;
-        ImGui::TextColored(kMuted, "Look");
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x * 0.36f);
-        ImGui::SetNextItemWidth(-1);
-        if (ImGui::BeginCombo("##look", cur)) {
+        ui::row("Look");
+        if (ui::beginPopupButton("##look", cur)) {
             for (const Look& l : kLooks) {
-                if (ImGui::Selectable(l.label, f.look == l.id)) {
+                if (ui::option(l.label, f.look == l.id)) {
                     f.look = l.id;
                     ch = true;
                     prefs_.save();
@@ -1041,89 +1291,43 @@ private:
             }
             ImGui::EndCombo();
         }
-        if (f.look != "none") ch |= slider("Look strength", &f.lookAmount, 0.f, 1.f);
+        ui::rowEnd();
+        if (f.look != "none") ch |= fx("Strength", &f.lookAmount, 0.f, 1.f);
+        ch |= fx("Brightness", &f.brightness, -1.f, 1.f, "%+.2f");
+        ch |= fx("Contrast", &f.contrast, -1.f, 1.f, "%+.2f");
+        ch |= fx("Saturation", &f.saturation, -1.f, 1.f, "%+.2f");
+        ch |= fx("Warmth", &f.warmth, -1.f, 1.f, "%+.2f");
+        ui::endGroup("Double-click a slider to reset it.");
 
-        if (ImGui::TreeNode("Adjust colours")) {
-            ch |= slider("Brightness", &f.brightness, -1.f, 1.f);
-            ch |= slider("Contrast", &f.contrast, -1.f, 1.f);
-            ch |= slider("Saturation", &f.saturation, -1.f, 1.f);
-            ch |= slider("Warmth", &f.warmth, -1.f, 1.f);
-            ImGui::TextColored(kMuted, "Double-click a slider to reset it.");
-            ImGui::TreePop();
-        }
-        ch |= slider("Sharpen", &f.sharpen, 0.f, 1.f);
-        ch |= slider("Smooth skin", &f.smooth, 0.f, 1.f);
-        ch |= slider("Night mode", &f.night, 0.f, 1.f);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Cleans up grain in low light by averaging frames where nothing moves.");
+        ui::beginGroup("Enhance");
+        ch |= fx("Sharpen", &f.sharpen, 0.f, 1.f);
+        ch |= fx("Smooth skin", &f.smooth, 0.f, 1.f);
+        ch |= fx("Night mode", &f.night, 0.f, 1.f);
+        ui::endGroup("Night mode cleans up grain in low light by averaging frames where nothing moves.");
 
-        // Background and auto-frame need the vision worker.
-        ImGui::TextColored(kMuted, "Background");
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x * 0.36f);
-        bool bc = false;
-        bc |= radio("Off##bg", f.background, "off");
-        ImGui::SameLine();
-        bc |= radio("Blur##bg", f.background, "blur");
-        ImGui::SameLine();
-        bc |= radio("Picture##bg", f.background, "image");
-        if (bc) {
-            ch = true;
-            if (f.background == "image" && f.backgroundImage.empty()) pickImage(f.backgroundImage);
-            if (f.background == "image") s.renderer.setBackgroundImage(f.backgroundImage);
-            prefs_.save();
-        }
-        if (f.background == "blur") ch |= slider("Blur", &f.blur, 0.f, 1.f);
-        if (f.background == "image") {
-            std::string name = f.backgroundImage.empty() ? std::string("(choose a picture)") : f.backgroundImage;
-            size_t slash = name.find_last_of("\\/");
-            if (slash != std::string::npos) name = name.substr(slash + 1);
-            if (ImGui::Button(("Picture: " + name).c_str(), ImVec2(-1, 0)) && pickImage(f.backgroundImage)) {
-                if (!s.renderer.setBackgroundImage(f.backgroundImage)) s.visionWhy = "Couldn't open that picture";
-                ch = true;
-                prefs_.save();
-            }
-        }
-        if (ImGui::Checkbox("Auto-frame (follow my face)", &f.autoFrame)) {
-            ch = true;
-            prefs_.save();
-        }
-        if (f.autoFrame) {
-            ch |= slider("Framing", &f.frameTightness, 0.f, 1.f, f.frameTightness < 0.35f ? "wide" : f.frameTightness > 0.7f ? "close" : "medium");
-            ch |= slider("Follow speed", &f.frameSpeed, 0.f, 1.f, f.frameSpeed < 0.35f ? "slow" : f.frameSpeed > 0.7f ? "fast" : "normal");
-        }
-        if ((f.background != "off" || f.autoFrame) && s.vision.failed()) wrapped(kBad, s.vision.error().c_str());
-        else if ((f.background != "off" || f.autoFrame) && !s.vision.ready()) wrapped(kMuted, "Loading the background / face models...");
-        if (!s.visionWhy.empty()) wrapped(kBad, s.visionWhy.c_str());
-        if (f.anyActive() && ImGui::SmallButton("Reset all effects")) {
+        if (f.anyActive() && ui::button("Reset all effects", false, ImGui::GetContentRegionAvail().x)) {
             f = FilterPrefs();
             ch = true;
             prefs_.save();
         }
+        (void)P;
         if (ch) s.dirty = true;
     }
 
     void drawOutput(Session& s) {
-        ImGui::SeparatorText("Output");
+        const ui::Palette& P = ui::P();
         SlotPrefs& sp = s.sp;
-        bool save = false;
-        save |= ImGui::Checkbox("Auto-rotate", &sp.autoRotate);
-        ImGui::SameLine();
-        if (ImGui::Button("Rotate 90")) {
-            sp.extraTurns = (sp.extraTurns + 1) & 3;
-            save = true;
-        }
-        save |= ImGui::Checkbox("Mirror", &sp.mirror);
-        ImGui::SameLine();
-        save |= ImGui::Checkbox("Flip", &sp.flip);
-
+        bool save = false, restart = false;
+        std::string vlabel = "Camera \"" + s.name() + "\"";
+        ui::beginGroup("Virtual camera");
+        if (toggleRow(vlabel.c_str(), &sp.virtualCamera)) restart = true;
         const char* cur = "Custom";
         for (const OutputSize& o : kOutputs)
             if (o.w == sp.outWidth && o.h == sp.outHeight) cur = o.label;
-        ImGui::TextColored(kMuted, "Camera size");
-        ImGui::SetNextItemWidth(-1);
-        bool restart = false;
-        if (ImGui::BeginCombo("##out", cur)) {
+        ui::row("Size");
+        if (ui::beginPopupButton("##out", cur)) {
             for (const OutputSize& o : kOutputs) {
-                if (ImGui::Selectable(o.label, o.w == sp.outWidth && o.h == sp.outHeight)) {
+                if (ui::option(o.label, o.w == sp.outWidth && o.h == sp.outHeight)) {
                     sp.outWidth = o.w;
                     sp.outHeight = o.h;
                     restart = true;
@@ -1131,18 +1335,42 @@ private:
             }
             ImGui::EndCombo();
         }
-        ImGui::TextColored(kMuted, "Camera fps");
-        for (int f : {30, 60}) {
-            ImGui::SameLine();
-            char lbl[8];
-            snprintf(lbl, sizeof(lbl), "%d##o", f);
-            if (ImGui::RadioButton(lbl, sp.outFps == f) && sp.outFps != f) {
-                sp.outFps = f;
-                restart = true;
+        ui::rowEnd();
+        int fsel = sp.outFps == 60 ? 1 : 0;
+        const char* fl[] = {"30 fps", "60 fps"};
+        ui::row("Frame rate");
+        if (ui::segmented("ofps", fl, 2, &fsel)) {
+            sp.outFps = fsel ? 60 : 30;
+            restart = true;
+        }
+        ui::rowEnd();
+        std::string foot;
+        if (sp.virtualCamera) {
+            if (!s.vcamWhy.empty()) foot = s.vcamWhy;
+            else if (s.vcam && s.vcam->running()) {
+                if (s.vcam->watched()) {
+                    char b[96];
+                    snprintf(b, sizeof(b), "An app is using the camera (%llu frames sent).", (unsigned long long)s.vcamSent);
+                    foot = b;
+                } else {
+                    foot = "Ready: pick \"" + s.name() + "\" in Zoom, Teams, Discord or OBS.";
+                }
             }
         }
-        std::string vlabel = "Virtual camera \"" + s.name() + "\"";
-        if (ImGui::Checkbox(vlabel.c_str(), &sp.virtualCamera)) restart = true;
+        ui::endGroup(foot.empty() ? nullptr : foot.c_str());
+        (void)P;
+
+        ui::beginGroup("Orientation");
+        save |= toggleRow("Auto-rotate", &sp.autoRotate);
+        save |= toggleRow("Mirror", &sp.mirror);
+        save |= toggleRow("Flip upside down", &sp.flip);
+        ui::row("Rotate", 96 * ui::S());
+        if (ui::button("90\xc2\xb0", false, -1)) {
+            sp.extraTurns = (sp.extraTurns + 1) & 3;
+            save = true;
+        }
+        ui::rowEnd();
+        ui::endGroup("Mirror only changes what you send. Most call apps mirror your self-view on their own.");
         if (restart) {
             s.restartVcam();
             save = true;
@@ -1151,74 +1379,62 @@ private:
             s.dirty = true;
             prefs_.save();
         }
-        if (sp.virtualCamera) {
-            if (!s.vcamWhy.empty()) wrapped(kBad, s.vcamWhy.c_str());
-            else if (s.vcam && s.vcam->running()) {
-                if (s.vcam->watched()) ImGui::TextColored(kGood, "An app is using the camera (%llu frames sent)", (unsigned long long)s.vcamSent);
-                else {
-                    std::string m = "Ready: pick \"" + s.name() + "\" in Zoom, Discord, OBS...";
-                    wrapped(kMuted, m.c_str());
-                }
-            }
-        }
+    }
+
+    void sendMic() {
+        for (int i = 0; i < active(); i++)
+            sessions_[i]->conn.sendControl({{"audio", prefs_.audio && prefs_.audioSlot == i}, {"mic", prefs_.micMode}});
+        audio_.clear();
     }
 
     void drawAudio() {
+        const ui::Palette& P = ui::P();
         if (audioRate_ != openedRate_) openAudio(); // stream switched sample rate
-        ImGui::SeparatorText("Sound");
         bool save = false;
-        auto sendMic = [&]() {
-            for (int i = 0; i < active(); i++)
-                sessions_[i]->conn.sendControl({{"audio", prefs_.audio && prefs_.audioSlot == i}, {"mic", prefs_.micMode}});
-            audio_.clear();
-        };
-        if (ImGui::Checkbox("Phone microphone", &prefs_.audio)) {
+        ui::beginGroup("Phone microphone");
+        if (toggleRow("Use the phone's mic", &prefs_.audio)) {
             sendMic();
             save = true;
         }
         if (prefs_.audio) {
-            ImGui::SameLine();
-            if (radio("Voice##mic", prefs_.micMode, "voice")) {
+            int mode = prefs_.micMode == "raw" ? 1 : 0;
+            const char* ml[] = {"Voice", "Raw"};
+            ui::row("Sound");
+            if (ui::segmented("mic", ml, 2, &mode)) {
+                prefs_.micMode = mode ? "raw" : "voice";
                 sendMic();
                 save = true;
             }
-            ImGui::SameLine();
-            if (radio("Raw##mic", prefs_.micMode, "raw")) {
-                sendMic();
-                save = true;
-            }
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Voice: noise suppression + echo cancel (calls)\nRaw: untouched sound (music, streams)");
+            ui::rowEnd();
             if (prefs_.secondPhone) {
-                ImGui::TextColored(kMuted, "From");
-                ImGui::SameLine();
-                if (ImGui::RadioButton("Phone 1##as", prefs_.audioSlot == 0) && prefs_.audioSlot != 0) {
-                    prefs_.audioSlot = 0;
+                const char* al[] = {"Phone 1", "Phone 2"};
+                ui::row("From");
+                if (ui::segmented("as", al, 2, &prefs_.audioSlot)) {
                     sendMic();
                     save = true;
                 }
-                ImGui::SameLine();
-                if (ImGui::RadioButton("Phone 2##as", prefs_.audioSlot == 1) && prefs_.audioSlot != 1) {
-                    prefs_.audioSlot = 1;
-                    sendMic();
-                    save = true;
-                }
+                ui::rowEnd();
             }
-            const Session& as = *sessions_[prefs_.audioSlot];
-            if (!as.hello.empty() && !jv(as.hello, "mic", true))
-                wrapped(kBad, "Microphone access is off on the phone (Settings > Apps > rng-lens)");
+        }
+        const Session& as = *sessions_[prefs_.audioSlot];
+        std::string foot = "Voice cleans up noise and echo for calls. Raw keeps the sound untouched for music and streams.";
+        if (prefs_.audio && !as.hello.empty() && !jv(as.hello, "mic", true))
+            foot = "Microphone access is off on the phone (Settings > Apps > rng-lens).";
+        ui::endGroup(foot.c_str());
 
+        if (prefs_.audio) {
+            ui::beginGroup("Playback");
             std::string cur = audio_.isOpen() ? audio_.deviceName() : std::string("(none)");
-            ImGui::TextColored(kMuted, "Play to");
-            ImGui::SetNextItemWidth(-1);
-            if (ImGui::BeginCombo("##aout", cur.c_str())) {
+            ui::row("Play to");
+            if (ui::beginPopupButton("##aout", cur.c_str())) {
                 if (devices_.empty() || ImGui::IsWindowAppearing()) devices_ = audio_.devices();
-                if (ImGui::Selectable("System default", prefs_.audioDevice.empty())) {
+                if (ui::option("System default", prefs_.audioDevice.empty())) {
                     prefs_.audioDevice.clear();
                     openAudio();
                     save = true;
                 }
                 for (const AudioOutput::Device& d : devices_) {
-                    if (ImGui::Selectable(d.name.c_str(), d.name == prefs_.audioDevice)) {
+                    if (ui::option(d.name.c_str(), d.name == prefs_.audioDevice)) {
                         prefs_.audioDevice = d.name;
                         openAudio();
                         save = true;
@@ -1226,47 +1442,63 @@ private:
                 }
                 ImGui::EndCombo();
             }
-            if (!audioWhy_.empty()) wrapped(kBad, audioWhy_.c_str());
-            wrapped(kMuted, "Tip: pick \"CABLE Input\" (VB-Cable) here to use the phone as a mic in Zoom/Discord.");
+            ui::rowEnd();
             float vol = prefs_.volume * 100.f;
-            ImGui::SetNextItemWidth(-90);
-            if (ImGui::SliderFloat("##vol", &vol, 0.f, 200.f, "%.0f%%")) {
+            ui::row("Volume");
+            if (ui::slider("##vol", &vol, 0.f, 200.f, "%.0f%%")) {
                 prefs_.volume = vol / 100.f;
                 audio_.setVolume(prefs_.volume);
             }
             if (ImGui::IsItemDeactivatedAfterEdit()) save = true;
-            ImGui::SameLine();
-            if (ImGui::Checkbox("Mute", &prefs_.muted)) {
+            ui::rowEnd();
+            if (toggleRow("Mute", &prefs_.muted)) {
                 audio_.setMuted(prefs_.muted);
                 save = true;
             }
             meter_ = std::max(audio_.peak(), meter_ * 0.85f);
-            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, meter_ > 0.95f ? kBad : kAccent);
-            ImGui::ProgressBar(std::min(1.f, meter_), ImVec2(-1, 6), "");
-            ImGui::PopStyleColor();
+            ui::row("Level");
+            ui::meter(meter_, meter_ > 0.95f ? P.bad : P.accent);
+            ui::rowEnd();
+            ui::endGroup(!audioWhy_.empty() ? audioWhy_.c_str()
+                                            : "To use the phone as a microphone in calls, install the free VB-Cable and pick \"CABLE Input\" here.");
         }
         if (save) prefs_.save();
     }
 
     void drawSettings() {
-        ImGui::SeparatorText("Settings");
         bool save = false;
-        if (ImGui::Checkbox("GPU decoding", &prefs_.hardwareDecode)) save = true;
+        ui::beginGroup("Appearance");
+        int th = prefs_.theme == "light" ? 1 : prefs_.theme == "dark" ? 2 : 0;
+        const char* tl[] = {"System", "Light", "Dark"};
+        ui::row("Theme");
+        if (ui::segmented("theme", tl, 3, &th)) {
+            prefs_.theme = th == 1 ? "light" : th == 2 ? "dark" : "system";
+            lastThemeAt_ = 0;
+            save = true;
+        }
+        ui::rowEnd();
+        ui::endGroup();
+
+        ui::beginGroup("General");
         if (shell_.supported()) {
-            if (ImGui::Checkbox("Start with Windows (in the tray)", &autostart_)) Shell::setAutostart(autostart_);
-            if (ImGui::Checkbox("Closing the window keeps the camera on (tray)", &prefs_.closeToTray)) save = true;
-            if (ImGui::Checkbox("Hotkeys", &prefs_.hotkeys)) {
+            if (toggleRow("Start with Windows", &autostart_)) Shell::setAutostart(autostart_);
+            if (toggleRow("Keep running in the tray", &prefs_.closeToTray)) save = true;
+            if (toggleRow("Hotkeys", &prefs_.hotkeys)) {
                 shell_.setHotkeysEnabled(prefs_.hotkeys);
                 save = true;
             }
-            if (prefs_.hotkeys && ImGui::TreeNode("Which keys")) {
-                for (const Shell::Hotkey& k : shell_.hotkeys())
-                    ImGui::TextColored(k.registered ? ImVec4(0.92f, 0.92f, 0.95f, 1.f) : kMuted, "%s  %s%s", k.keys, k.what,
-                                       k.registered ? "" : "  (taken by another app)");
-                ImGui::TreePop();
+            if (prefs_.hotkeys) {
+                for (const Shell::Hotkey& k : shell_.hotkeys()) {
+                    ui::row(k.what);
+                    ui::value(k.registered ? k.keys : "taken by another app", k.registered ? ui::P().secondary : ui::P().warn);
+                    ui::rowEnd();
+                }
             }
         }
-        if (ImGui::Checkbox("Second phone (camera \"rng-lens 2\")", &prefs_.secondPhone)) {
+        if (toggleRow("GPU decoding", &prefs_.hardwareDecode)) save = true;
+        bool second = prefs_.secondPhone;
+        if (toggleRow("Second phone", &second)) {
+            prefs_.secondPhone = second;
             Session& s2 = *sessions_[1];
             if (prefs_.secondPhone) {
                 if (!s2.vcam) s2.init();
@@ -1279,31 +1511,73 @@ private:
             }
             save = true;
         }
+        ui::endGroup("A second phone shows up as its own camera, \"rng-lens 2\".");
         if (save) prefs_.save();
     }
 
-    void drawStats(Session& s) {
-        ImGui::SeparatorText("Stats");
+    void drawInfo(Session& s) {
+        const ui::Palette& P = ui::P();
+        char b[160];
+        ui::beginGroup("Stream");
         if (!s.streaming()) {
-            ImGui::TextColored(kMuted, "Not streaming");
-            return;
+            ui::rowBlock();
+            ui::caption("Not streaming.", P.secondary);
+            ui::rowEnd();
+        } else {
+            ui::row("Video");
+            snprintf(b, sizeof(b), "%dx%d, %.0f fps, %.1f Mbit/s", s.conn.streamWidth(), s.conn.streamHeight(), s.fpsShown, s.mbps);
+            ui::value(b, P.secondary);
+            ui::rowEnd();
+            ui::row("Decoder");
+            snprintf(b, sizeof(b), "%s, %.1f ms", s.decoder.description().c_str(), s.decoder.lastDecodeMs());
+            ui::value(b, P.secondary);
+            ui::rowEnd();
+            std::string ac = s.conn.audioCodec();
+            if (!ac.empty() && prefs_.audioSlot == s.index) {
+                ui::row("Sound");
+                snprintf(b, sizeof(b), "%s, %.0f ms, %llu dropouts", ac.c_str(), audio_.bufferedMs(), (unsigned long long)audio_.underruns());
+                ui::value(b, P.secondary);
+                ui::rowEnd();
+            }
+            if (s.vision.ready() && (s.sp.filters.background != "off" || s.sp.filters.autoFrame)) {
+                ui::row("Vision");
+                snprintf(b, sizeof(b), "mask %.0f ms, face %.0f ms", s.vision.segMs(), s.vision.faceMs());
+                ui::value(b, P.secondary);
+                ui::rowEnd();
+            }
+            int dropped = jv(s.pstate, "dropped", 0);
+            if (dropped > 0) {
+                ui::row("Dropped on phone");
+                snprintf(b, sizeof(b), "%d (network too slow)", dropped);
+                ui::value(b, P.warn);
+                ui::rowEnd();
+            }
         }
-        ImGui::Text("%d x %d   %.0f fps   %.1f Mbit/s", s.conn.streamWidth(), s.conn.streamHeight(), s.fpsShown, s.mbps);
-        ImGui::Text("Decode: %s, %.1f ms", s.decoder.description().c_str(), s.decoder.lastDecodeMs());
-        std::string ac = s.conn.audioCodec();
-        if (!ac.empty() && prefs_.audioSlot == s.index)
-            ImGui::Text("Sound: %s, %.0f ms buffered, %llu dropouts", ac.c_str(), audio_.bufferedMs(), (unsigned long long)audio_.underruns());
-        if (s.vision.ready() && (s.sp.filters.background != "off" || s.sp.filters.autoFrame))
-            ImGui::Text("Vision: mask %.0f ms, face %.0f ms", s.vision.segMs(), s.vision.faceMs());
-        int dropped = jv(s.pstate, "dropped", 0);
-        if (dropped > 0) ImGui::TextColored(kMuted, "Dropped on phone: %d (network too slow)", dropped);
+        ui::endGroup();
+
         if (s.temps.size() >= 2) {
             std::vector<float> t(s.temps.begin(), s.temps.end());
             float lo = *std::min_element(t.begin(), t.end()), hi = *std::max_element(t.begin(), t.end());
-            char ov[48];
-            snprintf(ov, sizeof(ov), "phone %.0f C (%.0f..%.0f)", t.back(), lo, hi);
-            ImGui::PlotLines("##temp", t.data(), (int)t.size(), 0, ov, std::min(lo, 30.f), std::max(hi, 45.f), ImVec2(-1, 48));
+            snprintf(b, sizeof(b), "Phone temperature: %.0f\xc2\xb0" "C now, %.0f to %.0f\xc2\xb0" "C", t.back(), lo, hi);
+            ui::beginGroup("Temperature");
+            ui::rowBlock();
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0, 0, 0, 0));
+            ImGui::PlotLines("##temp", t.data(), (int)t.size(), 0, nullptr, std::min(lo, 30.f), std::max(hi, 45.f),
+                             ImVec2(-1, 70 * ui::S()));
+            ImGui::PopStyleColor();
+            ui::caption(b, P.secondary);
+            ui::rowEnd();
+            ui::endGroup();
         }
+
+        ui::beginGroup("About");
+        ui::row("Version");
+        ui::value(RNGLENS_VERSION, P.secondary);
+        ui::rowEnd();
+        ui::row("Source");
+        ui::value("github.com/MRRengi/rng-lens", P.secondary);
+        ui::rowEnd();
+        ui::endGroup("Free and open source (MIT).");
     }
 
     Prefs& prefs_;
@@ -1314,7 +1588,10 @@ private:
     Discovery disc_;
     Shell shell_;
     bool autostart_ = false, quit_ = false;
-    int64_t lastTrayAt_ = 0;
+    int64_t lastTrayAt_ = 0, lastThemeAt_ = 0;
+    int section_ = 0;
+    float scale_ = 1.f;
+    bool dark_ = true;
     AudioOutput audio_;
     std::vector<AudioOutput::Device> devices_;
     std::string audioWhy_;
