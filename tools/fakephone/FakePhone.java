@@ -295,8 +295,12 @@ public final class FakePhone implements Link.Listener {
                 String path = noise ? image.substring(0, image.length() - 6) : image;
                 String vf = "scale=" + width + ":" + height + ":force_original_aspect_ratio=increase,crop=" + width + ":" + height
                         + (noise ? ",noise=alls=18:allf=t" : "") + ",format=yuv420p";
-                String[] base = {"ffmpeg", "-hide_banner", "-loglevel", "error", "-re", "-loop", "1", "-framerate", "" + fps,
-                        "-i", path, "-vf", vf};
+                boolean video = path.endsWith(".mp4") || path.endsWith(".mkv");
+                String[] base = video
+                        ? new String[]{"ffmpeg", "-hide_banner", "-loglevel", "error", "-re", "-stream_loop", "-1", "-i", path,
+                                "-r", "" + fps, "-vf", vf}
+                        : new String[]{"ffmpeg", "-hide_banner", "-loglevel", "error", "-re", "-loop", "1", "-framerate", "" + fps,
+                                "-i", path, "-vf", vf};
                 for (String s : base) cmd.add(s);
             }
             if (hevc) {

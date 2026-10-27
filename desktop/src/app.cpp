@@ -1010,7 +1010,7 @@ private:
         // Top-left: what the camera is doing.
         char info[96];
         bool watched = s.vcam && s.vcam->running() && s.vcam->watched();
-        snprintf(info, sizeof(info), "%s  %dx%d  %.0f fps", watched ? "LIVE" : "PREVIEW", s.sp.outWidth, s.sp.outHeight, s.fpsShown);
+        snprintf(info, sizeof(info), "%s  %dx%d  %d fps", watched ? "LIVE" : "PREVIEW", s.sp.outWidth, s.sp.outHeight, s.sp.outFps);
         ImFont* sf = ui::fonts().small;
         ImVec2 ts = sf->CalcTextSizeA(sf->FontSize, FLT_MAX, 0, info);
         ImVec2 ia(pa.x + 14 * S, pa.y + 14 * S), ib(ia.x + ts.x + 30 * S, ia.y + ts.y + 12 * S);
