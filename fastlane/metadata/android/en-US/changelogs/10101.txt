@@ -1,0 +1,1 @@
+- Windows installer updates cleanly even while a call app still holds the old camera

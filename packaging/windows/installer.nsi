@@ -55,6 +55,31 @@ VIAddVersionKey "LegalCopyright" "MIT"
 !macro StopApp
   nsExec::Exec 'taskkill /f /im rng-lens.exe'
   Pop $0
+  Sleep 800 ; let it exit and release its files
+!macroend
+
+; A camera DLL stays loaded in every app that has looked at the camera (Teams, browsers, OBS, the Windows
+; camera service) until that app closes, and Windows won't overwrite or delete a loaded DLL. It does allow
+; renaming one, so: rename the old file out of the way (deleted at the next restart) and write the new one.
+!macro MoveAsideIfLocked PATH
+  ${If} ${FileExists} "${PATH}"
+    ClearErrors
+    Delete "${PATH}"
+    ${If} ${FileExists} "${PATH}"
+      GetTempFileName $R0 "$INSTDIR"
+      Delete $R0
+      Rename "${PATH}" "$R0"
+      Delete /REBOOTOK "$R0"
+    ${EndIf}
+  ${EndIf}
+!macroend
+
+!macro MoveAsideCameras
+  !insertmacro MoveAsideIfLocked "$INSTDIR\rnglens_vcam.dll"
+  !insertmacro MoveAsideIfLocked "$INSTDIR\rnglens_vcam2.dll"
+  !insertmacro MoveAsideIfLocked "$INSTDIR\x86\rnglens_vcam.dll"
+  !insertmacro MoveAsideIfLocked "$INSTDIR\x86\rnglens_vcam2.dll"
+  !insertmacro MoveAsideIfLocked "$INSTDIR\rng-lens.exe"
 !macroend
 
 !macro UnregisterOne DLL
@@ -100,7 +125,10 @@ Section "rng-lens" SecMain
   SetShellVarContext all
   !insertmacro StopApp
   SetOutPath "$INSTDIR"
+  Delete "$INSTDIR\*.tmp" ; old files set aside by an earlier update, if nothing holds them any more
   !insertmacro Unregister ; an older version's camera, so the DLL can be replaced
+  CreateDirectory "$INSTDIR\x86"
+  !insertmacro MoveAsideCameras
 
   File "${SRC}\rng-lens.exe"
   File "${SRC}\rnglens_vcam.dll"
@@ -161,19 +189,21 @@ Section "Uninstall"
   SetShellVarContext all
   !insertmacro StopApp
   !insertmacro Unregister
+  !insertmacro MoveAsideCameras
   nsExec::Exec 'netsh advfirewall firewall delete rule name="rng-lens"'
   Pop $0
   Delete "$DESKTOP\rng-lens.lnk"
   RMDir /r "$SMPROGRAMS\rng-lens"
   RMDir /r "$INSTDIR\adb"
-  RMDir /r "$INSTDIR\x86"
+  RMDir /r /REBOOTOK "$INSTDIR\x86"
   RMDir /r "$INSTDIR\models"
-  Delete "$INSTDIR\*.dll"
+  Delete /REBOOTOK "$INSTDIR\*.dll"
+  Delete /REBOOTOK "$INSTDIR\*.tmp"
   Delete "$INSTDIR\*.txt"
   Delete "$INSTDIR\rng-lens.exe"
   Delete "$INSTDIR\rng-lens.ico"
   Delete "$INSTDIR\uninstall.exe"
-  RMDir "$INSTDIR"
+  RMDir /REBOOTOK "$INSTDIR"
   DeleteRegKey HKLM "${UNINST_KEY}"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "rng-lens"
 SectionEnd

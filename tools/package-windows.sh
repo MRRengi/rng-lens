@@ -17,6 +17,7 @@ cp "$ROOT"/third_party/ffmpeg-win/bin/*.dll "$STAGE/"
 cp "$ROOT/packaging/windows/README.txt" "$ROOT/desktop/res/rng-lens.ico" "$STAGE/"
 cp "$ROOT/LICENSE" "$STAGE/LICENSE.txt"
 cp "$ROOT/third_party/softcam/LICENSE" "$STAGE/LICENSE-softcam.txt"
+cp "$ROOT/desktop/res/fonts/LICENSE-inter.txt" "$ROOT/desktop/res/fonts/LICENSE-lucide.txt" "$STAGE/"
 printf 'FFmpeg (avcodec, avutil, swscale, swresample) is LGPL 2.1+, built from\r\nhttps://github.com/FFmpeg/FFmpeg n7.1 with tools/build-ffmpeg-windows.sh from the rng-lens source.\r\n' > "$STAGE/LICENSE-ffmpeg.txt"
 printf 'miniaudio by David Reid, public domain / MIT-0. Dear ImGui (MIT), GLFW (zlib), nlohmann/json (MIT).\r\n' > "$STAGE/LICENSE-others.txt"
 ARGS=(-V2 -DVERSION="$VER" -DSRC="$STAGE" -DOUTFILE="$ROOT/dist/rng-lens-setup-$VER.exe")

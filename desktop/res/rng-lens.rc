@@ -1,7 +1,7 @@
 GLFW_ICON ICON "rng-lens.ico"
 1 VERSIONINFO
-FILEVERSION 1,1,0,0
-PRODUCTVERSION 1,1,0,0
+FILEVERSION 1,1,1,0
+PRODUCTVERSION 1,1,1,0
 BEGIN
   BLOCK "StringFileInfo"
   BEGIN
@@ -10,7 +10,7 @@ BEGIN
       VALUE "CompanyName", "rengi.dev"
       VALUE "FileDescription", "rng-lens - phone as webcam"
       VALUE "ProductName", "rng-lens"
-      VALUE "ProductVersion", "1.1.0"
+      VALUE "ProductVersion", "1.1.1"
       VALUE "LegalCopyright", "MIT"
     END
   END
