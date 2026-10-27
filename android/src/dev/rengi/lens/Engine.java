@@ -238,6 +238,10 @@ final class Engine implements Link.Listener, Pipeline.Sink, AudioPipeline.Sink {
             JSONObject hello = catalog.toJson();
             hello.put("proto", Protocol.VERSION);
             hello.put("device", Build.MANUFACTURER + " " + Build.MODEL);
+            try {
+                hello.put("version", context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName);
+            } catch (Exception ignored) {
+            }
             hello.put("state", stateJson());
             hello.put("mic", micAllowed());
             l.send(Protocol.json(Protocol.HELLO, hello.toString()));

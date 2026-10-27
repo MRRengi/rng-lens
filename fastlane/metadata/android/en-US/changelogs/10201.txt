@@ -1,0 +1,2 @@
+- The PC app now tells you when the phone app is out of date, and can update it over USB
+- Auto-frame follows faster and frames tighter

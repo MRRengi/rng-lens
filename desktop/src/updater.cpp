@@ -214,6 +214,25 @@ void Updater::download() {
 #endif
 }
 
+bool Updater::fetch(const std::string& url, const std::string& path, std::string& err) {
+#ifdef _WIN32
+    FILE* f = fopen(path.c_str(), "wb");
+    if (!f) {
+        err = "could not save the file";
+        return false;
+    }
+    bool ok = httpGet(url, nullptr, f, err, [](uint64_t, uint64_t) {});
+    fclose(f);
+    if (!ok) DeleteFileA(path.c_str());
+    return ok;
+#else
+    (void)url;
+    (void)path;
+    err = "Windows only";
+    return false;
+#endif
+}
+
 bool Updater::launchInstaller() {
 #ifdef _WIN32
     std::string f;

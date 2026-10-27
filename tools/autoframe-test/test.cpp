@@ -38,7 +38,7 @@ void run(const char* name, F step) {
     CropRect crop;
     FaceBox fb;
     double stillPath = 0, maxJump = 0, pvx = 0, pvy = 0;
-    float px = 0.5f, py = 0.5f, endErr = 0;
+    float px = 0.5f, py = 0.5f, endErr = 0, reachT = -1, firstZoomT = -1;
     for (int i = 0; i < 60 * 30; i++) {
         float t = i * dt;
         // true head: x 0.45 with a tiny sway, moves to 0.65 between t=12 and 13
@@ -57,9 +57,11 @@ void run(const char* name, F step) {
         if (t > 5) maxJump = std::fmax(maxJump, std::hypot(vx - pvx, vy - pvy));
         pvx = vx, pvy = vy, px = cx, py = cy;
         if (t > 17.9f && t < 18) endErr = std::fabs(cx - 0.65f);
+        if (t > 12 && reachT < 0 && std::fabs(cx - 0.65f) < 0.02f) reachT = t - 12;
+        if (firstZoomT < 0 && (crop.y1 - crop.y0) < 0.75f) firstZoomT = t;
     }
-    printf("%-10s wander while still: %.4f   biggest twitch: %.3f   off target after move: %.3f\n", name, stillPath,
-           maxJump, endErr);
+    printf("%-10s wander while still: %.4f   biggest twitch: %.3f   off target after move: %.3f   caught up %.2fs after the move started   zoomed in at %.2fs\n",
+           name, stillPath, maxJump, endErr, reachT, firstZoomT);
 }
 
 int main() {

@@ -24,6 +24,8 @@ public:
     float progress() const { return progress_.load(); } // 0..1 while downloading
 
     static bool newer(const std::string& a, const std::string& b); // a > b, "1.10.0" > "1.9.3"
+    // Blocking download of `url` into `path` (Windows only). For the phone APK.
+    static bool fetch(const std::string& url, const std::string& path, std::string& err);
 
 private:
     void join();

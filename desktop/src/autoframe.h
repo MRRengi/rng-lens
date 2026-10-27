@@ -32,9 +32,9 @@ public:
                 fx_ = fx, fy_ = fy, fh_ = fb.h;
                 haveFace_ = true;
             } else {
-                fx_ += (fx - fx_) * 0.45f;
-                fy_ += (fy - fy_) * 0.45f;
-                fh_ += (fb.h - fh_) * 0.2f;
+                fx_ += (fx - fx_) * 0.6f;
+                fy_ += (fy - fy_) * 0.6f;
+                fh_ += (fb.h - fh_) * 0.3f;
             }
             lastDetMs_ = fb.atMs;
         }
@@ -44,7 +44,7 @@ public:
         float tx = 0.5f, ty = 0.5f, th = 1.f;
         float maxH = fitHeight(1.f, ww, wh, aspect);
         if (haveFace_) {
-            float k = 4.6f - 2.4f * tightness; // crop height in face heights
+            float k = 4.2f - 2.6f * tightness; // crop height in face heights
             th = std::fmin(maxH, std::fmax(0.35f, fh_ * k));
             tx = fx_;
             ty = fy_ + th * 0.12f; // eyes in the upper third
@@ -59,7 +59,7 @@ public:
             goalInit_ = true;
             dx = tx - gx_, dy = ty - gy_, dh = th - gh_;
         }
-        float startMove = ch_ * 0.07f, startZoom = ch_ * 0.12f;
+        float startMove = ch_ * 0.065f, startZoom = ch_ * 0.10f;
         if (!tracking_ && (std::fabs(dx) > startMove || std::fabs(dy) > startMove || std::fabs(dh) > startZoom))
             tracking_ = true;
         if (tracking_) {
@@ -70,12 +70,12 @@ public:
             if (settled) tracking_ = false;
         }
 
-        // 3. Spring towards the goal. Speed slider: 1.4 s (slow) .. 0.35 s (fast) to settle.
-        float smooth = 0.7f - 0.52f * speed;
+        // 3. Spring towards the goal. Speed slider: ~1 s (slow) .. ~0.25 s (fast) to settle.
+        float smooth = 0.45f - 0.34f * speed;
         float ox = cx_, oy = cy_, oh = ch_;
         cx_ = smoothDamp(cx_, gx_, vx_, smooth, dt);
         cy_ = smoothDamp(cy_, gy_, vy_, smooth, dt);
-        ch_ = smoothDamp(ch_, gh_, vh_, smooth * 1.3f, dt); // zoom a bit lazier than pan
+        ch_ = smoothDamp(ch_, gh_, vh_, smooth * 1.15f, dt); // zoom a bit lazier than pan
 
         // Crop rectangle, kept inside the picture (clamped here, not in the spring, so edges don't fight it).
         float h = std::fmin(ch_, maxH);

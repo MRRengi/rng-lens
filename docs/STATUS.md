@@ -32,6 +32,10 @@ DONE
   one click downloads and starts the installer); exposure on the face (phone meters AE on the face the PC
   finds). Checked: several apps reading the camera at once already works (Wine, 2 readers)
 
+- v1.2.1: found on Maks's Poco over adb: the phone still ran 1.0.0 (camera controls bug fixed in 1.0.1).
+  The PC app now detects an old phone app and updates it over USB in one click; the phone reports its
+  version. Auto-frame retuned (catches up faster than 1.0, still steady); webcam stock photo in README/site
+
 *WE ARE HERE*
 - Maks: install 1.2.0: pause, pull Wi-Fi mid-call, face exposure against a window, the phone screen design;
   tell what exactly Teams showed (which camera picked, which other apps were open)

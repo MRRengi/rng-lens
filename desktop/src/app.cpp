@@ -15,6 +15,8 @@
 #include <deque>
 #include <memory>
 #include <string>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 #include <glad/gl.h>
@@ -471,6 +473,9 @@ struct Session {
 
 class App {
 public:
+    ~App() {
+        if (phoneUpd_.joinable()) phoneUpd_.join();
+    }
     App(Prefs& prefs, const AppOptions& opt) : prefs_(prefs), opt_(opt) {
         sessions_[0] = std::make_unique<Session>(0, prefs);
         sessions_[1] = std::make_unique<Session>(1, prefs);
@@ -699,6 +704,52 @@ private:
         }
     }
 
+    // The phone app is older than this PC app (or too old to say its version): some controls won't work.
+    static bool phoneOutdated(const Session& s) {
+        if (!s.streaming() || s.hello.empty()) return false;
+        std::string v = jv(s.hello, "version", std::string());
+        return v.empty() || Updater::newer(RNGLENS_VERSION, v);
+    }
+
+    void startPhoneUpdate() {
+        if (phoneUpdState_ == 1) return;
+        if (phoneUpd_.joinable()) phoneUpd_.join();
+        phoneUpdState_ = 1;
+        phoneUpd_ = std::thread([this] {
+            auto done = [this](int st, const std::string& m) {
+                {
+                    std::lock_guard<std::mutex> lock(phoneUpdM_);
+                    phoneUpdMsg_ = m;
+                }
+                phoneUpdState_ = st;
+                glfwPostEmptyEvent();
+            };
+#ifdef _WIN32
+            char tmp[MAX_PATH];
+            GetTempPathA(MAX_PATH, tmp);
+            std::string apk = std::string(tmp) + "rng-lens-phone.apk", err;
+            std::string url = std::string("https://github.com/MRRengi/rng-lens/releases/download/v") + RNGLENS_VERSION + "/rng-lens.apk";
+            if (!Updater::fetch(url, apk, err)) return done(3, "Couldn't download the phone app: " + err);
+            std::vector<std::string> adbs = {"\"" + plat::exeDir() + "adb\\adb.exe\"", "adb"};
+            for (const std::string& adb : adbs) {
+                std::string out;
+                int rc = plat::run(adb + " install -r \"" + apk + "\"", out);
+                if (rc < 0) continue; // this adb doesn't exist
+                if (out.find("Success") != std::string::npos) return done(2, "Phone app updated. Open rng-lens on the phone again.");
+                if (out.find("no devices") != std::string::npos)
+                    return done(3, "No phone on USB. Plug it in with USB debugging on, or install rng-lens.apk from the release page on the phone.");
+                if (out.find("unauthorized") != std::string::npos) return done(3, "Tap \"Allow\" on the phone's USB debugging prompt, then try again.");
+                if (out.find("INSTALL_FAILED_UPDATE_INCOMPATIBLE") != std::string::npos)
+                    return done(3, "The phone has a test build signed differently: uninstall rng-lens on the phone, then try again.");
+                return done(3, out.empty() ? std::string("adb install failed") : out);
+            }
+            done(3, "adb not found. Reinstall rng-lens on the PC, or install rng-lens.apk on the phone from the release page.");
+#else
+            done(3, "Install rng-lens.apk from the release page on the phone.");
+#endif
+        });
+    }
+
     bool adbForward(std::string& msg) {
         std::vector<std::string> adbs;
 #ifdef _WIN32
@@ -858,6 +909,10 @@ private:
             ui::text(b, level >= 3 || temp >= 45 ? P.bad : level >= 1 || temp >= 40 ? P.warn : P.secondary);
             ImGui::SameLine(0, 10 * S);
             ui::textSecondary(clock(nowMs() - s.streamStart).c_str());
+            if (phoneOutdated(s)) {
+                std::string m = std::string(ui::icon::alert) + " Phone app needs an update";
+                ui::text(m.c_str(), P.warn);
+            }
         }
         ImGui::PopFont();
         ImGui::EndGroup();
@@ -1069,9 +1124,34 @@ private:
         }
     }
 
+    void drawPhoneUpdateGroup(Session& s) {
+        int st = phoneUpdState_.load();
+        if (!phoneOutdated(s) && st != 2) return;
+        std::string v = jv(s.hello, "version", std::string());
+        ui::beginGroup("Phone app");
+        ui::rowBlock();
+        std::string msg = st == 2 ? std::string("Updated.")
+                                  : "The phone runs " + (v.empty() ? std::string("an old version") : "version " + v) +
+                                        " and this PC app is " RNGLENS_VERSION ". Zoom, focus, torch and other camera controls need both up to date.";
+        ui::caption(msg.c_str(), st == 2 ? ui::P().good : ui::P().warn);
+        if (st != 2) {
+            float w = ImGui::CalcItemWidth();
+            if (ui::button(st == 1 ? "Updating the phone..." : "Update the phone over USB", true, w) && st != 1) startPhoneUpdate();
+        }
+        ui::rowEnd();
+        std::string foot;
+        {
+            std::lock_guard<std::mutex> lock(phoneUpdM_);
+            foot = phoneUpdMsg_;
+        }
+        if (foot.empty() && st == 0) foot = "Or download rng-lens.apk on the phone from the release page and install it.";
+        ui::endGroup(foot.c_str());
+    }
+
     void drawPhone(Session& s) {
         const ui::Palette& P = ui::P();
         Connection::State st = s.conn.state();
+        drawPhoneUpdateGroup(s);
         if (st == Connection::State::Streaming || st == Connection::State::Connecting) {
             bool live = st == Connection::State::Streaming;
             std::string dev = s.device();
@@ -1772,6 +1852,11 @@ private:
     bool autostart_ = false, quit_ = false;
     int64_t lastTrayAt_ = 0, lastThemeAt_ = 0, lastUpdateCheck_ = 0;
     Updater updater_;
+    // Updating the phone app over USB (adb install of the APK from the matching release)
+    std::thread phoneUpd_;
+    std::atomic<int> phoneUpdState_{0}; // 0 idle, 1 working, 2 done, 3 failed
+    std::mutex phoneUpdM_;
+    std::string phoneUpdMsg_;
     int section_ = 0;
     float scale_ = 1.f;
     bool dark_ = true;

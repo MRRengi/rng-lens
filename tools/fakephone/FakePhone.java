@@ -94,7 +94,7 @@ public final class FakePhone implements Link.Listener {
     }
 
     private String hello() {
-        return "{\"proto\":1,\"device\":\"" + System.getenv().getOrDefault("FAKE_DEVICE", "rng-lens FakePhone") + "\",\"hevc\":true,\"encoder\":\"ffmpeg\",\"cameras\":["
+        return "{\"proto\":1,\"version\":\"" + System.getenv().getOrDefault("FAKE_VERSION", "9.9.9") + "\",\"device\":\"" + System.getenv().getOrDefault("FAKE_DEVICE", "rng-lens FakePhone") + "\",\"hevc\":true,\"encoder\":\"ffmpeg\",\"cameras\":["
                 + "{\"id\":\"0\",\"facing\":\"back\",\"sensorOrientation\":90,\"focal\":4.3,"
                 + "\"sizes\":[[1920,1080,60],[1280,720,60],[640,480,30]],\"fps\":[[15,30],[30,30],[60,60]],"
                 + "\"zoom\":[0.6,8.0],\"flash\":true,\"aeRegions\":true,\"afManual\":true,\"ev\":[-12,12,0.1667],\"stab\":true},"

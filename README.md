@@ -117,4 +117,4 @@ or push a tag `vX.Y.Z` - CI builds, benches and publishes the Release with the t
 ## License
 
 MIT. Softcam is MIT (see its LICENSE), Inter is OFL-1.1, Lucide icons are ISC, miniaudio is public domain / MIT-0, ONNX Runtime is MIT,
-PP-HumanSeg is Apache-2.0, YuNet is MIT. FFmpeg is LGPL and linked dynamically.
+PP-HumanSeg is Apache-2.0, YuNet is MIT. The photo in the screenshot is from Pexels (free to use). FFmpeg is LGPL and linked dynamically.
