@@ -1,6 +1,6 @@
 // Test-bench app for the Windows virtual camera: does what Zoom/OBS do through DirectShow.
-// Lists video capture devices, opens "rng-lens", pulls a frame through a Sample Grabber and saves it.
-//   dshow-probe.exe [out.bmp] [seconds] [camera name, default "rng-lens"]
+// Lists video capture devices, opens "Lens", pulls a frame through a Sample Grabber and saves it.
+//   dshow-probe.exe [out.bmp] [seconds] [camera name, default "Lens"]
 #include <dshow.h>
 #include <initguid.h>
 #include <qedit.h>
@@ -46,7 +46,7 @@ struct Grab : public ISampleGrabberCB {
 int main(int argc, char** argv) {
     const char* out = argc > 1 ? argv[1] : "probe.bmp";
     int seconds = argc > 2 ? atoi(argv[2]) : 3;
-    std::string camName = argc > 3 ? argv[3] : "rng-lens";
+    std::string camName = argc > 3 ? argv[3] : "Lens";
     CoInitialize(nullptr);
 
     ICreateDevEnum* devEnum = nullptr;

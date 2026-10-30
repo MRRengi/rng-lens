@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(rng-lens VERSION 1.2.2 LANGUAGES C CXX)
+project(rng-lens VERSION 1.3.0 LANGUAGES C CXX)
 set(RNGLENS_VERSION "" CACHE STRING "Version shown in the app (empty = the project version)")
 if(NOT RNGLENS_VERSION)
     set(RNGLENS_VERSION "${PROJECT_VERSION}")

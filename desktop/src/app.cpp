@@ -182,7 +182,7 @@ struct Session {
     Session(int i, Prefs& p) : index(i), prefs(p), sp(p.slot[i]) {}
 
     bool streaming() const { return conn.state() == Connection::State::Streaming; }
-    std::string name() const { return index == 0 ? "rng-lens" : "rng-lens 2"; }
+    std::string name() const { return index == 0 ? "Lens" : "Lens 2"; }
     std::string device() const { return jv(hello, "device", std::string()); }
 
     bool rendererReady = false;
@@ -551,7 +551,7 @@ private:
             ww = std::min(ww, mode->width - 40);
             wh = std::min(960, mode->height - 120);
         }
-        win_ = glfwCreateWindow(ww, wh, "rng-lens", nullptr, nullptr);
+        win_ = glfwCreateWindow(ww, wh, "Lens", nullptr, nullptr);
         if (!win_) return false;
         glfwSetWindowUserPointer(win_, this);
         glfwSetWindowCloseCallback(win_, [](GLFWwindow* w) {
@@ -634,7 +634,7 @@ private:
         if (now - lastTrayAt_ < 2000) return;
         lastTrayAt_ = now;
         Session& s = *sessions_[0];
-        std::string tip = "rng-lens";
+        std::string tip = "Lens";
         if (s.streaming()) {
             tip += " - " + (s.device().empty() ? std::string("phone") : s.device());
             int bat = jv(s.pstate, "battery", -1);
@@ -736,12 +736,12 @@ private:
                 std::string out;
                 int rc = plat::run(adb + " install -r \"" + apk + "\"", out);
                 if (rc < 0) continue; // this adb doesn't exist
-                if (out.find("Success") != std::string::npos) return done(2, "Phone app updated. Open rng-lens on the phone again.");
+                if (out.find("Success") != std::string::npos) return done(2, "Phone app updated. Open Lens on the phone again.");
                 if (out.find("no devices") != std::string::npos)
                     return done(3, "No phone on USB. Plug it in with USB debugging on, or install rng-lens.apk from the release page on the phone.");
                 if (out.find("unauthorized") != std::string::npos) return done(3, "Tap \"Allow\" on the phone's USB debugging prompt, then try again.");
                 if (out.find("INSTALL_FAILED_UPDATE_INCOMPATIBLE") != std::string::npos)
-                    return done(3, "The phone has a test build signed differently: uninstall rng-lens on the phone, then try again.");
+                    return done(3, "The phone has a test build signed differently: uninstall Lens on the phone, then try again.");
                 return done(3, out.empty() ? std::string("adb install failed") : out);
             }
             done(3, "adb not found. Reinstall rng-lens on the PC, or install rng-lens.apk on the phone from the release page.");
@@ -798,7 +798,7 @@ private:
                 return false;
             }
         }
-        msg = "adb not found. Reinstall rng-lens (the installer brings adb) or put adb in PATH.";
+        msg = "adb not found. Reinstall Lens (the installer brings adb) or put adb in PATH.";
         return false;
     }
 
@@ -880,7 +880,7 @@ private:
         const ui::Palette& P = ui::P();
         const float S = ui::S();
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 6 * S);
-        ui::title("rng-lens");
+        ui::title("Lens");
         ImGui::SameLine();
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 6 * S);
         ImGui::PushFont(ui::fonts().small);
@@ -986,7 +986,7 @@ private:
         ImGui::SetCursorScreenPos(ImVec2(a.x + 12 * S, a.y + 10 * S));
         ImGui::BeginGroup();
         ImGui::PushFont(ui::fonts().strong);
-        std::string head = std::string(ui::icon::download) + "  rng-lens " + updater_.latest();
+        std::string head = std::string(ui::icon::download) + "  Lens " + updater_.latest();
         ui::text(head.c_str(), P.label);
         ImGui::PopFont();
         ImGui::PushFont(ui::fonts().small);
@@ -1120,7 +1120,7 @@ private:
         ImVec2 hs = tf->CalcTextSizeA(tf->FontSize, FLT_MAX, 0, head);
         dl->AddText(tf, tf->FontSize, ImVec2(cx - hs.x / 2, y), ui::col(fg), head);
         y += hs.y + 12 * S;
-        const char* lines[] = {"Open rng-lens on the phone, on the same Wi-Fi.",
+        const char* lines[] = {"Open Lens on the phone, on the same Wi-Fi.",
                                "It shows up under Phone. Or plug in USB with USB debugging on."};
         ImFont* bf = ui::fonts().body;
         for (const char* l : lines) {
@@ -1248,7 +1248,7 @@ private:
         }
         if (!shown) {
             ui::rowBlock();
-            ui::caption(disc_.listening() ? "Looking for phones... Open rng-lens on the phone."
+            ui::caption(disc_.listening() ? "Looking for phones... Open Lens on the phone."
                                           : "Wi-Fi discovery is blocked (port 38441). Connect by address below.",
                         P.secondary);
             ui::rowEnd();
@@ -1683,7 +1683,7 @@ private:
         const Session& as = *sessions_[prefs_.audioSlot];
         std::string foot = "Voice cleans up noise and echo for calls. Raw keeps the sound untouched for music and streams.";
         if (prefs_.audio && !as.hello.empty() && !jv(as.hello, "mic", true))
-            foot = "Microphone access is off on the phone (Settings > Apps > rng-lens).";
+            foot = "Microphone access is off on the phone (Settings > Apps > Lens).";
         ui::endGroup(foot.c_str());
 
         if (prefs_.audio) {
@@ -1775,7 +1775,7 @@ private:
             }
             save = true;
         }
-        ui::endGroup("A second phone shows up as its own camera, \"rng-lens 2\".");
+        ui::endGroup("A second phone shows up as its own camera, \"Lens 2\".");
 
         ui::beginGroup("Updates");
         if (toggleRow("Check for updates", &prefs_.autoUpdate)) save = true;
@@ -1791,7 +1791,7 @@ private:
         std::string foot;
         switch (us) {
         case Updater::State::UpToDate: foot = "You have the latest version."; break;
-        case Updater::State::Available: foot = "rng-lens " + updater_.latest() + " is out."; break;
+        case Updater::State::Available: foot = "Lens " + updater_.latest() + " is out."; break;
         case Updater::State::Downloading: foot = "Downloading the installer..."; break;
         case Updater::State::Failed: foot = "Couldn't check: " + updater_.error() + "."; break;
         case Updater::State::Unsupported: foot = "Updates are checked on Windows only."; break;

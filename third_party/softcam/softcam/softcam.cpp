@@ -24,9 +24,9 @@ namespace {
 // Setup data
 
 #ifdef RNGLENS_VCAM_SECOND
-const wchar_t FILTER_NAME[] = L"rng-lens 2";
+const wchar_t FILTER_NAME[] = L"Lens 2";
 #else
-const wchar_t FILTER_NAME[] = L"rng-lens";
+const wchar_t FILTER_NAME[] = L"Lens";
 #endif
 const GUID &FILTER_CLASSID = CLSID_DShowSoftcam;
 

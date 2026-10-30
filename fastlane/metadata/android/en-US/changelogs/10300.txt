@@ -1,0 +1,1 @@
+The app is now called Lens: the window, Start menu, tray, phone app and camera. In call apps pick the camera "Lens" (and "Lens 2" for a second phone) once after updating.

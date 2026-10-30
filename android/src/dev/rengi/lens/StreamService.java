@@ -134,7 +134,7 @@ public final class StreamService extends Service implements Engine.Status {
         Intent stop = new Intent(this, StreamService.class).setAction(ACTION_STOP);
         int piFlags = Build.VERSION.SDK_INT >= 23 ? 0x04000000 : 0; // FLAG_IMMUTABLE
         b.setSmallIcon(R.drawable.ic_launcher)
-                .setContentTitle("rng-lens")
+                .setContentTitle("Lens")
                 .setContentText(text)
                 .setOngoing(true)
                 .setShowWhen(false)

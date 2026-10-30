@@ -30,7 +30,7 @@ public:
 
     bool available(std::string& why) override {
         if (findDevice().empty()) {
-            why = "No v4l2loopback device: sudo modprobe v4l2loopback exclusive_caps=1 card_label=rng-lens";
+            why = "No v4l2loopback device: sudo modprobe v4l2loopback exclusive_caps=1 card_label=Lens";
             return false;
         }
         return true;
@@ -101,15 +101,16 @@ private:
             fclose(f);
             std::string s(name);
             while (!s.empty() && (s.back() == '\n' || s.back() == ' ')) s.pop_back();
-            if (s.find("rng-lens") != std::string::npos || s.find("Dummy") != std::string::npos ||
+            if (s.find("rng-lens") != std::string::npos || s.find("Lens") != std::string::npos || s.find("Dummy") != std::string::npos ||
                 s.find("loopback") != std::string::npos)
                 devs.push_back({s, std::string("/dev/") + e->d_name});
         }
         closedir(d);
         std::sort(devs.begin(), devs.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
-        const char* want = index_ ? "rng-lens 2" : "rng-lens";
+        const char* want = index_ ? "Lens 2" : "Lens";
+        const char* old = index_ ? "rng-lens 2" : "rng-lens"; // label used before the rename
         for (const auto& dv : devs)
-            if (dv.first == want) return dv.second;
+            if (dv.first == want || dv.first == old) return dv.second;
         return (size_t)index_ < devs.size() ? devs[index_].second : std::string();
     }
 

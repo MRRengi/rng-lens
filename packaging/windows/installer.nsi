@@ -14,21 +14,22 @@ SetCompressor /SOLID lzma
   !define OUTFILE "rng-lens-setup-${VERSION}.exe"
 !endif
 
-!define APP "rng-lens"
+!define APP "rng-lens" ; folder, uninstall key, file names (unchanged so updates replace the old install)
+!define NAME "Lens"     ; what people see
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP}"
 
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "LogicLib.nsh"
 
-Name "${APP}"
+Name "${NAME}"
 OutFile "${OUTFILE}"
 InstallDir "$PROGRAMFILES64\${APP}"
 RequestExecutionLevel admin
-BrandingText "${APP} ${VERSION} - free and open source"
+BrandingText "${NAME} ${VERSION} - free and open source"
 VIProductVersion "${VERSION}.0"
-VIAddVersionKey "ProductName" "${APP}"
-VIAddVersionKey "FileDescription" "${APP} installer"
+VIAddVersionKey "ProductName" "${NAME}"
+VIAddVersionKey "FileDescription" "${NAME} installer"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "CompanyName" "rengi.dev"
@@ -37,9 +38,9 @@ VIAddVersionKey "LegalCopyright" "MIT"
 !define MUI_ICON "${SRC}\rng-lens.ico"
 !define MUI_UNICON "${SRC}\rng-lens.ico"
 !define MUI_ABORTWARNING
-!define MUI_WELCOMEPAGE_TEXT "Turns your phone into a webcam (and microphone) for any app on this PC: background blur, auto-frame, looks and night mode included.$\r$\n$\r$\nThis adds the camera $\"rng-lens$\" that Zoom, Discord, OBS, Teams and browsers can pick.$\r$\n$\r$\nOn the phone: install rng-lens.apk from the same release page."
+!define MUI_WELCOMEPAGE_TEXT "Turns your phone into a webcam (and microphone) for any app on this PC: background blur, auto-frame, looks and night mode included.$\r$\n$\r$\nThis adds the camera $\"Lens$\" that Zoom, Discord, OBS, Teams and browsers can pick.$\r$\n$\r$\nOn the phone: install the Lens app (rng-lens.apk) from the same release page."
 !define MUI_FINISHPAGE_RUN "$INSTDIR\rng-lens.exe"
-!define MUI_FINISHPAGE_RUN_TEXT "Start rng-lens"
+!define MUI_FINISHPAGE_RUN_TEXT "Start Lens"
 !define MUI_FINISHPAGE_LINK "Get the phone app and updates"
 !define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/MRRengi/rng-lens/releases"
 
@@ -120,7 +121,7 @@ Function un.onInit
   SetRegView 64
 FunctionEnd
 
-Section "rng-lens" SecMain
+Section "Lens" SecMain
   SectionIn RO
   SetShellVarContext all
   !insertmacro StopApp
@@ -156,7 +157,7 @@ Section "rng-lens" SecMain
 !endif
   SetOutPath "$INSTDIR"
 
-  ; The cameras ("rng-lens" and, for the optional second phone, "rng-lens 2"), for 64-bit and 32-bit apps.
+  ; The cameras ("Lens" and, for the optional second phone, "Lens 2"), for 64-bit and 32-bit apps.
   !insertmacro RegisterOne "rnglens_vcam.dll"
   !insertmacro RegisterOne "rnglens_vcam2.dll"
 
@@ -166,13 +167,14 @@ Section "rng-lens" SecMain
   nsExec::Exec 'netsh advfirewall firewall add rule name="rng-lens" dir=in action=allow program="$INSTDIR\rng-lens.exe" enable=yes profile=any'
   Pop $0
 
-  CreateDirectory "$SMPROGRAMS\rng-lens"
-  CreateShortcut "$SMPROGRAMS\rng-lens\rng-lens.lnk" "$INSTDIR\rng-lens.exe" "" "$INSTDIR\rng-lens.ico"
-  CreateShortcut "$SMPROGRAMS\rng-lens\Uninstall rng-lens.lnk" "$INSTDIR\uninstall.exe"
-  CreateShortcut "$DESKTOP\rng-lens.lnk" "$INSTDIR\rng-lens.exe" "" "$INSTDIR\rng-lens.ico"
+  ; Shortcuts from versions before the rename.
+  RMDir /r "$SMPROGRAMS\rng-lens"
+  Delete "$DESKTOP\rng-lens.lnk"
+  CreateShortcut "$SMPROGRAMS\Lens.lnk" "$INSTDIR\rng-lens.exe" "" "$INSTDIR\rng-lens.ico"
+  CreateShortcut "$DESKTOP\Lens.lnk" "$INSTDIR\rng-lens.exe" "" "$INSTDIR\rng-lens.ico"
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
-  WriteRegStr HKLM "${UNINST_KEY}" "DisplayName" "${APP}"
+  WriteRegStr HKLM "${UNINST_KEY}" "DisplayName" "${NAME}"
   WriteRegStr HKLM "${UNINST_KEY}" "DisplayVersion" "${VERSION}"
   WriteRegStr HKLM "${UNINST_KEY}" "Publisher" "rengi.dev"
   WriteRegStr HKLM "${UNINST_KEY}" "URLInfoAbout" "https://github.com/MRRengi/rng-lens"
@@ -192,6 +194,8 @@ Section "Uninstall"
   !insertmacro MoveAsideCameras
   nsExec::Exec 'netsh advfirewall firewall delete rule name="rng-lens"'
   Pop $0
+  Delete "$DESKTOP\Lens.lnk"
+  Delete "$SMPROGRAMS\Lens.lnk"
   Delete "$DESKTOP\rng-lens.lnk"
   RMDir /r "$SMPROGRAMS\rng-lens"
   RMDir /r "$INSTDIR\adb"

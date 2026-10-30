@@ -51,7 +51,7 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             self->dispatch(Shell::Show);
         } else if (ev == WM_RBUTTONUP || ev == WM_CONTEXTMENU) {
             HMENU m = CreatePopupMenu();
-            AppendMenuW(m, MF_STRING, Shell::Show, L"Open rng-lens");
+            AppendMenuW(m, MF_STRING, Shell::Show, L"Open Lens");
             AppendMenuW(m, MF_STRING, Shell::ToggleMute, L"Mute / unmute mic");
             AppendMenuW(m, MF_STRING, Shell::ToggleMirror, L"Mirror");
             AppendMenuW(m, MF_STRING, Shell::TogglePause, L"Pause / resume camera");
@@ -115,7 +115,7 @@ bool Shell::init(GLFWwindow*, std::function<void(int)> onCommand) {
     nid.uCallbackMessage = kTrayMsg;
     nid.hIcon = LoadIconW(inst, L"GLFW_ICON");
     if (!nid.hIcon) nid.hIcon = LoadIconW(nullptr, (LPCWSTR)IDI_APPLICATION);
-    wcscpy(nid.szTip, L"rng-lens");
+    wcscpy(nid.szTip, L"Lens");
     trayAdded_ = Shell_NotifyIconW(NIM_ADD, &nid) != FALSE;
     return true;
 }

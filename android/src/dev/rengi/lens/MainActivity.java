@@ -70,7 +70,7 @@ public final class MainActivity extends Activity implements Engine.Status {
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startEngine();
         } else {
-            showStatus("Camera access needed\nGrant it in Settings > Apps > rng-lens.", false);
+            showStatus("Camera access needed\nGrant it in Settings > Apps > Lens.", false);
         }
     }
 
@@ -216,7 +216,7 @@ public final class MainActivity extends Activity implements Engine.Status {
         scroll.addView(col);
 
         // Large title
-        TextView title = label("rng-lens", 34, cLabel, true);
+        TextView title = label("Lens", 34, cLabel, true);
         title.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         title.setPadding(dp(4), dp(8), 0, 0);
         col.addView(title);
@@ -280,12 +280,12 @@ public final class MainActivity extends Activity implements Engine.Status {
         LinearLayout tips = card();
         tips.addView(cardRow("Lock the screen any time: streaming keeps going. A dark screen is the coolest phone."));
         tips.addView(separator());
-        tips.addView(cardRow("Zoom, focus, effects and the microphone are all set in rng-lens on your PC."));
+        tips.addView(cardRow("Zoom, focus, effects and the microphone are all set in Lens on your PC."));
         String maker = android.os.Build.MANUFACTURER.toLowerCase(java.util.Locale.US);
         if (maker.contains("xiaomi") || maker.contains("redmi") || maker.contains("poco")) {
             tips.addView(separator());
-            tips.addView(cardRow("MIUI / HyperOS: Settings > Apps > rng-lens > Battery saver > No restrictions, "
-                    + "and lock rng-lens in Recents, or the system may stop it."));
+            tips.addView(cardRow("MIUI / HyperOS: Settings > Apps > Lens > Battery saver > No restrictions, "
+                    + "and lock Lens in Recents, or the system may stop it."));
         }
         col.addView(tips);
 

@@ -2,7 +2,7 @@ rng-lens turns your Android phone into a webcam and microphone for your Windows 
 
 <b>What you get</b>
 <ul>
-<li>A normal camera called "rng-lens" in Zoom, Discord, OBS, Teams, Meet and any other app</li>
+<li>A normal camera called "Lens" in Zoom, Discord, OBS, Teams, Meet and any other app</li>
 <li>Wi-Fi with automatic discovery, or USB</li>
 <li>Up to 4K and 60 fps, H.264 or HEVC</li>
 <li>Every lens the phone exposes, zoom, manual focus, exposure and white-balance locks, torch, stabilization</li>

@@ -9,6 +9,8 @@ no pro version: every feature is included.
 
 ![rng-lens on the PC](docs/img/rng-lens-pc.png)
 
+The app itself is called **Lens** on the PC and the phone (search "Lens" in the Start menu).
+
 ## How it compares
 
 | | rng-lens | Typical free phone-webcam apps |
@@ -22,7 +24,7 @@ no pro version: every feature is included.
 
 ## Features
 
-- Any app sees a camera called **rng-lens**: Zoom, Discord, OBS, Teams, Meet in Chrome
+- Any app sees a camera called **Lens**: Zoom, Discord, OBS, Teams, Meet in Chrome
 - Wi-Fi with auto-discovery, or USB through adb
 - Up to 4K and 60 fps, H.264 or HEVC
 - Every lens the phone exposes (ultra-wide via zoom below 1x), zoom, focus auto / lock / manual,
@@ -42,7 +44,7 @@ no pro version: every feature is included.
 - Updates itself from inside the PC app
 - Clean macOS-style look on the PC and the phone, light and dark with the system
 - Tray icon, start with Windows, global hotkeys (Ctrl+Alt+M/R/T/B/F/P)
-- Optional second phone as a second camera, "rng-lens 2"
+- Optional second phone as a second camera, "Lens 2"
 
 ## Why it's light on the phone
 
@@ -59,7 +61,7 @@ behind, the phone drops frames until the next key frame instead of buffering.
 |------|------|
 | `android/` | Phone app, plain Java, no libraries. `build.sh` builds the APK without Gradle |
 | `desktop/` | PC app, C++17: FFmpeg decode (GPU on Windows via D3D11VA), OpenGL effect chain, Dear ImGui, ONNX Runtime for background / face |
-| `third_party/softcam/` | Windows virtual camera: [Softcam](https://github.com/tshino/softcam) rebranded (own CLSID, name "rng-lens"), builds with mingw |
+| `third_party/softcam/` | Windows virtual camera: [Softcam](https://github.com/tshino/softcam) rebranded (own CLSID, name "Lens"), builds with mingw |
 | `tools/` | Test benches, FFmpeg build script, icon generator |
 | `packaging/windows/` | NSIS installer and the user README |
 | `site/` | Project website (GitHub Pages) and privacy policy |
@@ -90,7 +92,7 @@ PC, Linux:
 ```
 sudo apt install libavcodec-dev libavutil-dev libswscale-dev libswresample-dev libglfw3-dev cmake
 cd desktop && cmake -B build-linux && cmake --build build-linux -j
-# virtual camera: sudo modprobe v4l2loopback exclusive_caps=1 card_label=rng-lens
+# virtual camera: sudo modprobe v4l2loopback exclusive_caps=1 card_label=Lens
 ```
 
 ## Test benches (no phone, no Windows machine, no display needed)
@@ -103,8 +105,8 @@ cd desktop && cmake -B build-linux && cmake --build build-linux -j
   against a no-effects baseline (b&w has no colour, background blur keeps the person sharp, auto-frame
   zooms in and centres the face, night mode removes grain, and so on).
 - `tools/wine-bench.sh` - the Windows build under Wine with two phones: real GUI and OpenGL, both
-  DirectShow cameras registered, and a DirectShow client pulling frames from "rng-lens" (64 and 32 bit)
-  and "rng-lens 2".
+  DirectShow cameras registered, and a DirectShow client pulling frames from "Lens" (64 and 32 bit)
+  and "Lens 2".
 - `tools/sound-bench.sh [linux|wine]` - the real app plays the tone into a PulseAudio null sink, recorded and checked.
 
 ## Releasing

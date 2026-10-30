@@ -32,7 +32,7 @@ sleep 26
 
 pass=0; fail=0
 for p in probe64 probe32 probe64:2; do
-  exe=${p%%:*}; cam="rng-lens"; [ "$p" != "$exe" ] && cam="rng-lens 2"
+  exe=${p%%:*}; cam="Lens"; [ "$p" != "$exe" ] && cam="Lens 2"
   (cd "$STAGE" && timeout 30 wine $exe.exe "${p/:/_}.bmp" 2 "$cam" 2>/dev/null > "${p/:/_}.log")
   p=${p/:/_}
   if grep -q "^OK" "$STAGE/$p.log" && python3 -c "
