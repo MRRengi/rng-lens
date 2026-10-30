@@ -1,0 +1,1 @@
+- Opening rng-lens again brings the running window to the front instead of starting a second copy

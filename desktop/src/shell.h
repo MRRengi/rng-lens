@@ -27,6 +27,9 @@ public:
     void setHotkeysEnabled(bool on);
     const std::vector<Hotkey>& hotkeys() const { return hotkeys_; }
 
+    // Single instance: true if rng-lens already runs (it was asked to show its window), so this one should exit.
+    static bool alreadyRunning();
+
     static bool autostart();
     static void setAutostart(bool on);
 

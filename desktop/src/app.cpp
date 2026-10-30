@@ -27,6 +27,7 @@
 #include <GLFW/glfw3native.h>
 #include <commdlg.h>
 #include <dwmapi.h>
+#include <tlhelp32.h>
 #endif
 
 #include "imgui.h"
@@ -730,7 +731,7 @@ private:
             std::string apk = std::string(tmp) + "rng-lens-phone.apk", err;
             std::string url = std::string("https://github.com/MRRengi/rng-lens/releases/download/v") + RNGLENS_VERSION + "/rng-lens.apk";
             if (!Updater::fetch(url, apk, err)) return done(3, "Couldn't download the phone app: " + err);
-            std::vector<std::string> adbs = {"\"" + plat::exeDir() + "adb\\adb.exe\"", "adb"};
+            std::vector<std::string> adbs = adbCandidates();
             for (const std::string& adb : adbs) {
                 std::string out;
                 int rc = plat::run(adb + " install -r \"" + apk + "\"", out);
@@ -750,13 +751,36 @@ private:
         });
     }
 
-    bool adbForward(std::string& msg) {
+    // adb binaries to try, best first. If an adb server already runs (Unity, Android Studio...), use that
+    // exact adb: two adb versions kill each other's server and the phone keeps dropping to "offline".
+    static std::vector<std::string> adbCandidates() {
         std::vector<std::string> adbs;
 #ifdef _WIN32
+        HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (snap != INVALID_HANDLE_VALUE) {
+            PROCESSENTRY32W pe{};
+            pe.dwSize = sizeof(pe);
+            for (BOOL ok = Process32FirstW(snap, &pe); ok; ok = Process32NextW(snap, &pe)) {
+                if (_wcsicmp(pe.szExeFile, L"adb.exe") != 0) continue;
+                HANDLE p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pe.th32ProcessID);
+                if (!p) continue;
+                char path[MAX_PATH];
+                DWORD n = MAX_PATH;
+                if (QueryFullProcessImageNameA(p, 0, path, &n)) adbs.push_back("\"" + std::string(path, n) + "\"");
+                CloseHandle(p);
+                break;
+            }
+            CloseHandle(snap);
+        }
         adbs.push_back("\"" + plat::exeDir() + "adb\\adb.exe\"");
         adbs.push_back("\"" + plat::exeDir() + "adb.exe\"");
 #endif
         adbs.push_back("adb");
+        return adbs;
+    }
+
+    bool adbForward(std::string& msg) {
+        std::vector<std::string> adbs = adbCandidates();
         for (const std::string& adb : adbs) {
             std::string out;
             int rc = plat::run(adb + " forward tcp:" + std::to_string(proto::kPort) + " tcp:" + std::to_string(proto::kPort), out);

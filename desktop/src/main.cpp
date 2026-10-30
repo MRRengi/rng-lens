@@ -10,6 +10,7 @@
 #include "headless.h"
 #include "prefs.h"
 #include "protocol.h"
+#include "shell.h"
 
 int main(int argc, char** argv) {
     bool headless = false;
@@ -39,6 +40,7 @@ int main(int argc, char** argv) {
         else if (a == "--wav") wav = next();
     }
     if (headless) return runHeadless(host, port, frames, png, control, wav);
+    if (opt.dumpOutput.empty() && Shell::alreadyRunning()) return 0; // brought the running one to the front
     Prefs prefs;
     prefs.load();
     if (connect) {

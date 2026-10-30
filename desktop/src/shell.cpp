@@ -15,6 +15,7 @@
 namespace {
 
 constexpr UINT kTrayMsg = WM_APP + 1;
+constexpr UINT kShowMsg = WM_APP + 2; // sent by a second rng-lens started while this one runs
 constexpr UINT kTrayId = 1;
 const wchar_t* kRunKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
@@ -38,6 +39,10 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     if (!self) return DefWindowProcW(h, msg, wp, lp);
     if (msg == WM_HOTKEY) {
         self->dispatch((int)wp);
+        return 0;
+    }
+    if (msg == kShowMsg) {
+        self->dispatch(Shell::Show);
         return 0;
     }
     if (msg == kTrayMsg) {
@@ -70,6 +75,23 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
 Shell::~Shell() { shutdown(); }
 
 bool Shell::supported() const { return true; }
+
+bool Shell::alreadyRunning() {
+    // Kept open for the life of the process; the OS releases it when we exit.
+    HANDLE m = CreateMutexW(nullptr, FALSE, L"Local\\rng-lens-single-instance");
+    if (!m || GetLastError() != ERROR_ALREADY_EXISTS) return false;
+    for (int i = 0; i < 20; i++) { // the first one may still be starting up
+        if (HWND h = FindWindowW(L"rng-lens-shell", nullptr)) {
+            DWORD pid = 0;
+            GetWindowThreadProcessId(h, &pid);
+            AllowSetForegroundWindow(pid);
+            PostMessageW(h, kShowMsg, 0, 0);
+            break;
+        }
+        Sleep(100);
+    }
+    return true;
+}
 
 bool Shell::init(GLFWwindow*, std::function<void(int)> onCommand) {
     onCommand_ = std::move(onCommand);
@@ -173,6 +195,7 @@ void Shell::shutdown() {}
 bool Shell::supported() const { return false; }
 void Shell::setTooltip(const std::string&) {}
 void Shell::setHotkeysEnabled(bool) {}
+bool Shell::alreadyRunning() { return false; }
 bool Shell::autostart() { return false; }
 void Shell::setAutostart(bool) {}
 void Shell::dispatch(int command) {
